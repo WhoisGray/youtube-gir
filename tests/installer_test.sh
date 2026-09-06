@@ -36,17 +36,17 @@ export MOCK_YOUTUBE_GIR_CLI="$PROJECT_DIR/bin/youtube-gir"
 export YOUTUBE_GIR_BIN_DIR="$TEST_ROOT/home/.local/bin"
 
 output="$(bash "$TEST_ROOT/standalone/install.sh" --no-deps)"
-[[ "$output" == *'youtube-gir 1.0.0 نصب شد'* ]]
+[[ "$output" == *'youtube-gir 1.0.0 was installed'* ]]
 [[ -x "$YOUTUBE_GIR_BIN_DIR/youtube-gir" ]]
 [[ -L "$YOUTUBE_GIR_BIN_DIR/youtube-git" ]]
 
 output="$(bash "$TEST_ROOT/standalone/install.sh" --no-deps)"
-[[ "$output" == *'youtube-gir به‌روز است (1.0.0)'* ]]
+[[ "$output" == *'youtube-gir is up to date (1.0.0)'* ]]
 [[ "$("$YOUTUBE_GIR_BIN_DIR/youtube-git" --version)" == 'youtube-gir 1.0.0' ]]
 
 rm -rf "$YOUTUBE_GIR_BIN_DIR"
 output="$(cd "$TEST_ROOT" && bash -s -- --no-deps < "$TEST_ROOT/standalone/install.sh")"
-[[ "$output" == *'دریافت youtube-gir از GitHub'* ]]
+[[ "$output" == *'Downloading youtube-gir from GitHub'* ]]
 [[ -x "$YOUTUBE_GIR_BIN_DIR/youtube-gir" ]]
 
 printf '✅ Installer tests passed\n'

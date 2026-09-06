@@ -54,34 +54,34 @@ version_without_v() { printf '%s' "${1#v}"; }
 
 bootstrap_brew() {
   command -v brew >/dev/null 2>&1 && return
-  [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]] || fail "Homebrew فقط روی macOS/Linux پشتیبانی می‌شود."
+  [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]] || fail "Homebrew is supported only on macOS and Linux."
   if [[ "$ASSUME_YES" != "true" && -t 0 ]]; then
-    printf 'Homebrew نصب نیست. نصب‌کنندهٔ رسمی brew.sh اجرا شود؟ [y/N] '
+    printf 'Homebrew is not installed. Run the official brew.sh installer? [y/N] '
     read -r answer
-    [[ "$answer" =~ ^[Yy]$ ]] || fail "نصب لغو شد."
+    [[ "$answer" =~ ^[Yy]$ ]] || fail "Installation cancelled."
   fi
   local temporary_dir installer
   temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/youtube-gir-brew.XXXXXX")"
   TEMPORARY_PATHS+=("$temporary_dir")
   installer="$temporary_dir/install.sh"
-  log "دریافت نصب‌کنندهٔ رسمی Homebrew…"
+  log "Downloading the official Homebrew installer…"
   download_file 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh' "$installer"
   if [[ "$ASSUME_YES" == "true" ]]; then NONINTERACTIVE=1 /bin/bash "$installer"; else /bin/bash "$installer"; fi
   if [[ -x /opt/homebrew/bin/brew ]]; then eval "$(/opt/homebrew/bin/brew shellenv)"; fi
   if [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"; fi
-  command -v brew >/dev/null 2>&1 || fail "Homebrew نصب شد اما هنوز در PATH نیست؛ ترمینال را باز کنید و دوباره اجرا کنید."
+  command -v brew >/dev/null 2>&1 || fail "Homebrew was installed but is not in PATH. Open a new terminal and run this installer again."
 }
 
 update_brew_formula() {
   local formula="$1" label="$2"
   if ! brew list "$formula" >/dev/null 2>&1; then
-    log "نصب $label از Homebrew…"
+    log "Installing $label with Homebrew…"
     brew install "$formula"
   elif brew outdated --quiet "$formula" | grep -q .; then
-    log "نسخهٔ جدید $label پیدا شد؛ در حال ارتقا…"
+    log "A newer $label version is available; upgrading…"
     brew upgrade "$formula"
   else
-    done_message "$label به‌روز است."
+    done_message "$label is up to date."
   fi
 }
 
@@ -91,7 +91,7 @@ install_or_update_deno() {
     return
   fi
   if command -v deno >/dev/null 2>&1; then
-    log "بررسی نسخهٔ Deno با updater رسمی…"
+    log "Checking Deno with its official updater…"
     deno upgrade
     return
   fi
@@ -99,7 +99,7 @@ install_or_update_deno() {
   temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/youtube-gir-deno.XXXXXX")"
   TEMPORARY_PATHS+=("$temporary_dir")
   installer="$temporary_dir/install.sh"
-  log "دریافت Deno از deno.land…"
+  log "Downloading Deno from deno.land…"
   download_file 'https://deno.land/install.sh' "$installer"
   sh "$installer"
   export PATH="$HOME/.deno/bin:$PATH"
@@ -118,14 +118,14 @@ install_or_update_ytdlp() {
     Darwin:*) asset="yt-dlp_macos" ;;
     Linux:x86_64|Linux:amd64) asset="yt-dlp_linux" ;;
     Linux:aarch64|Linux:arm64) asset="yt-dlp_linux_aarch64" ;;
-    *) fail "باینری رسمی yt-dlp برای $system/$machine در این نصب‌کننده تعریف نشده است." ;;
+    *) fail "No official yt-dlp binary is configured for $system/$machine." ;;
   esac
 
   latest="$(github_latest_tag 'yt-dlp/yt-dlp' || true)"
   installed=""
   if [[ -x "$INSTALL_DIR/yt-dlp" ]]; then installed="$("$INSTALL_DIR/yt-dlp" --version 2>/dev/null || true)"; fi
   if [[ "$FORCE_INSTALL" != "true" && -n "$latest" && "$(version_without_v "$latest")" == "$(version_without_v "$installed")" ]]; then
-    done_message "yt-dlp به‌روز است ($installed)."
+    done_message "yt-dlp is up to date ($installed)."
     return
   fi
 
@@ -133,16 +133,16 @@ install_or_update_ytdlp() {
   TEMPORARY_PATHS+=("$temporary_dir")
   binary="$temporary_dir/$asset"
   sums="$temporary_dir/SHA2-256SUMS"
-  log "دریافت آخرین باینری رسمی yt-dlp و checksum از GitHub…"
+  log "Downloading the latest official yt-dlp binary and checksum from GitHub…"
   download_file "https://github.com/yt-dlp/yt-dlp/releases/latest/download/$asset" "$binary"
   download_file 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS' "$sums"
   expected="$(awk -v name="$asset" '$2 == name || $2 == "*" name { print $1; exit }' "$sums")"
-  [[ -n "$expected" ]] || fail "checksum مربوط به $asset پیدا نشد."
+  [[ -n "$expected" ]] || fail "Could not find the checksum for $asset."
   actual="$(sha256_file "$binary")"
-  [[ "$actual" == "$expected" ]] || fail "بررسی SHA-256 باینری yt-dlp ناموفق بود."
+  [[ "$actual" == "$expected" ]] || fail "The yt-dlp SHA-256 verification failed."
   mkdir -p "$INSTALL_DIR"
   install -m 0755 "$binary" "$INSTALL_DIR/yt-dlp"
-  done_message "yt-dlp ${latest:-latest} نصب شد."
+  done_message "yt-dlp ${latest:-latest} was installed."
 }
 
 resolve_cli_source() {
@@ -164,7 +164,7 @@ resolve_cli_source() {
   candidate="$temporary_dir/youtube-gir"
   latest="$(github_latest_tag "$REPOSITORY" || true)"
   ref="${latest:-main}"
-  log "دریافت youtube-gir از GitHub (${ref})…"
+  log "Downloading youtube-gir from GitHub (${ref})…"
   download_file "$RAW_ROOT/$ref/bin/youtube-gir" "$candidate"
   SOURCE_CLI="$candidate"
 }
@@ -172,28 +172,28 @@ resolve_cli_source() {
 install_or_update_app() {
   local source_cli="$1" candidate_version installed_version
   candidate_version="$(sed -n 's/^readonly APP_VERSION="\([^"]*\)"/\1/p' "$source_cli" | head -n 1)"
-  [[ -n "$candidate_version" ]] || fail "نسخهٔ youtube-gir در فایل دریافتی پیدا نشد."
+  [[ -n "$candidate_version" ]] || fail "Could not determine the youtube-gir version from the downloaded file."
   installed_version=""
   if [[ -x "$INSTALL_DIR/youtube-gir" ]]; then
     installed_version="$("$INSTALL_DIR/youtube-gir" --version 2>/dev/null | awk '{print $2}' || true)"
   fi
   mkdir -p "$INSTALL_DIR"
   if [[ "$FORCE_INSTALL" != "true" && "$installed_version" == "$candidate_version" ]]; then
-    done_message "youtube-gir به‌روز است ($installed_version)."
+    done_message "youtube-gir is up to date ($installed_version)."
   else
     install -m 0755 "$source_cli" "$INSTALL_DIR/youtube-gir"
-    done_message "youtube-gir $candidate_version نصب شد."
+    done_message "youtube-gir $candidate_version was installed."
   fi
   ln -sf "$INSTALL_DIR/youtube-gir" "$INSTALL_DIR/youtube-git"
 }
 
-command -v curl >/dev/null 2>&1 || fail "curl برای نصب لازم است."
+command -v curl >/dev/null 2>&1 || fail "curl is required for installation."
 SOURCE_CLI=""
 resolve_cli_source
 
 if [[ "$INSTALL_DEPS" == "true" ]]; then
   bootstrap_brew
-  log "به‌روزرسانی فهرست بسته‌های Homebrew…"
+  log "Updating the Homebrew package index…"
   brew update
   update_brew_formula node Node.js
   update_brew_formula ffmpeg FFmpeg
@@ -203,10 +203,10 @@ fi
 
 install_or_update_app "$SOURCE_CLI"
 
-done_message "فرمان اصلی: $INSTALL_DIR/youtube-gir"
-done_message "alias سازگار: $INSTALL_DIR/youtube-git"
+done_message "Main command: $INSTALL_DIR/youtube-gir"
+done_message "Compatibility alias: $INSTALL_DIR/youtube-git"
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
-  *) printf '⚠️  این خط را به ~/.zshrc یا ~/.bashrc اضافه کنید:\n    export PATH="%s:%s"\n' "$INSTALL_DIR" "\$PATH" ;;
+  *) printf '⚠️  Add this line to ~/.zshrc or ~/.bashrc:\n    export PATH="%s:%s"\n' "$INSTALL_DIR" "\$PATH" ;;
 esac
-printf '\nشروع: %s/youtube-gir doctor\n' "$INSTALL_DIR"
+printf '\nStart with: %s/youtube-gir doctor\n' "$INSTALL_DIR"
