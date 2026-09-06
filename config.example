@@ -1,0 +1,13 @@
+# Copy to ~/.config/youtube-gir/config and edit as plain key=value lines.
+default_media=video
+default_quality=excellent
+audio_dir=
+video_dir=
+cookies_browser=chrome
+use_cookies=true
+sponsorblock=false
+use_archive=false
+archive_file=~/.local/share/youtube-gir/archive.txt
+youtube_player_client=mweb
+embed_thumbnail=true
+embed_metadata=true

@@ -1,0 +1,6 @@
+.DS_Store
+graphify-out/
+*.part
+*.ytdl
+*.temp.*
+archive.txt

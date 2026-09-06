@@ -1,0 +1,553 @@
+#!/usr/bin/env bash
+
+set -o pipefail
+
+readonly APP_NAME="youtube-gir"
+readonly APP_VERSION="1.0.0"
+readonly REPOSITORY="WhoisGray/youtube-gir"
+
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  readonly C_RESET=$'\033[0m'
+  readonly C_BOLD=$'\033[1m'
+  readonly C_BLUE=$'\033[34m'
+  readonly C_GREEN=$'\033[32m'
+  readonly C_YELLOW=$'\033[33m'
+  readonly C_RED=$'\033[31m'
+else
+  readonly C_RESET="" C_BOLD="" C_BLUE="" C_GREEN="" C_YELLOW="" C_RED=""
+fi
+
+info() { printf '%sℹ%s  %s\n' "$C_BLUE" "$C_RESET" "$*"; }
+ok() { printf '%s✅%s %s\n' "$C_GREEN" "$C_RESET" "$*"; }
+warn() { printf '%s⚠️%s  %s\n' "$C_YELLOW" "$C_RESET" "$*" >&2; }
+die() { printf '%s❌%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/youtube-gir"
+CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}/youtube-gir"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/youtube-gir"
+CONFIG_FILE="$CONFIG_HOME/config"
+
+default_media="video"
+default_quality="excellent"
+audio_dir=""
+video_dir=""
+cookies_browser="chrome"
+use_cookies="true"
+sponsorblock="false"
+use_archive="false"
+archive_file="$DATA_HOME/archive.txt"
+youtube_player_client="mweb"
+embed_thumbnail="true"
+embed_metadata="true"
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+expand_path() {
+  case "$1" in
+    "~") printf '%s' "$HOME" ;;
+    \~/*) printf '%s/%s' "$HOME" "${1#~/}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+valid_bool() { [[ "$1" == "true" || "$1" == "false" ]]; }
+
+set_config_value() {
+  local key="$1" value="$2"
+  case "$key" in
+    default_media) [[ "$value" == "audio" || "$value" == "video" ]] && default_media="$value" ;;
+    default_quality) normalize_quality "$value" >/dev/null && default_quality="$(normalize_quality "$value")" ;;
+    audio_dir) audio_dir="$value" ;;
+    video_dir) video_dir="$value" ;;
+    cookies_browser) cookies_browser="$value" ;;
+    use_cookies) valid_bool "$value" && use_cookies="$value" ;;
+    sponsorblock) valid_bool "$value" && sponsorblock="$value" ;;
+    use_archive) valid_bool "$value" && use_archive="$value" ;;
+    archive_file) archive_file="$value" ;;
+    youtube_player_client) youtube_player_client="$value" ;;
+    embed_thumbnail) valid_bool "$value" && embed_thumbnail="$value" ;;
+    embed_metadata) valid_bool "$value" && embed_metadata="$value" ;;
+    *) warn "کلید ناشناخته در کانفیگ نادیده گرفته شد: $key" ;;
+  esac
+}
+
+load_config() {
+  [[ -f "$CONFIG_FILE" ]] || return 0
+  local line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="$(trim "$line")"
+    [[ -z "$line" || "$line" == \#* || "$line" != *=* ]] && continue
+    key="$(trim "${line%%=*}")"
+    value="$(trim "${line#*=}")"
+    set_config_value "$key" "$value"
+  done < "$CONFIG_FILE"
+}
+
+save_config() {
+  mkdir -p "$CONFIG_HOME" "$CACHE_HOME" "$DATA_HOME" || die "ساخت پوشه‌های تنظیمات ممکن نشد."
+  local temporary="$CONFIG_FILE.tmp.$$"
+  umask 077
+  {
+    printf '# youtube-gir configuration — values are plain text (not shell code)\n'
+    printf 'default_media=%s\n' "$default_media"
+    printf 'default_quality=%s\n' "$default_quality"
+    printf 'audio_dir=%s\n' "$audio_dir"
+    printf 'video_dir=%s\n' "$video_dir"
+    printf 'cookies_browser=%s\n' "$cookies_browser"
+    printf 'use_cookies=%s\n' "$use_cookies"
+    printf 'sponsorblock=%s\n' "$sponsorblock"
+    printf 'use_archive=%s\n' "$use_archive"
+    printf 'archive_file=%s\n' "$archive_file"
+    printf 'youtube_player_client=%s\n' "$youtube_player_client"
+    printf 'embed_thumbnail=%s\n' "$embed_thumbnail"
+    printf 'embed_metadata=%s\n' "$embed_metadata"
+  } > "$temporary" || die "نوشتن کانفیگ ممکن نشد."
+  mv "$temporary" "$CONFIG_FILE" || die "ذخیرهٔ کانفیگ ممکن نشد."
+  ok "تنظیمات در $CONFIG_FILE ذخیره شد."
+}
+
+normalize_quality() {
+  local lowered
+  lowered="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$lowered" in
+    excellent|best|عالی) printf 'excellent' ;;
+    normal|معمولی) printf 'normal' ;;
+    good|خوب) printf 'good' ;;
+    low|پایین) printf 'low' ;;
+    *) return 1 ;;
+  esac
+}
+
+audio_bitrate() {
+  case "$1" in
+    excellent) printf '192k' ;;
+    normal) printf '160k' ;;
+    good) printf '128k' ;;
+    low) printf '96k' ;;
+  esac
+}
+
+video_height() {
+  case "$1" in
+    excellent) printf '1080' ;;
+    normal) printf '720' ;;
+    good) printf '480' ;;
+    low) printf '360' ;;
+  esac
+}
+
+print_version() { printf '%s %s\n' "$APP_NAME" "$APP_VERSION"; }
+
+usage() {
+  cat <<'EOF'
+🎬 youtube-gir — دانلودر تعاملی و سریع مبتنی بر yt-dlp
+
+استفاده:
+  youtube-gir LINK                         دانلود سریع با پیش‌فرض عالی
+  youtube-git LINK                         نام سازگار (alias)
+  youtube-gir                              ورود به حالت تعاملی
+  youtube-gir [گزینه‌ها] LINK [LINK...]
+
+گزینه‌های دانلود:
+  -a, --audio                فقط صدا (M4A/AAC)
+  -v, --video                ویدئو + صدا (MP4)
+  -q, --quality LEVEL        excellent | normal | good | low
+  -o, --output DIR           پوشهٔ خروجی برای همین اجرا
+      --fast                 حالت سریع؛ بدون thumbnail و chapter
+      --sponsorblock         حذف sponsor و selfpromo
+      --no-sponsorblock      غیرفعال‌کردن SponsorBlock
+      --archive              ردکردن موارد دانلودشده با آرشیو پیش‌فرض
+      --archive-file FILE    فعال‌کردن آرشیو با فایل مشخص
+      --playlist             اجازهٔ دانلود playlist/channel
+      --no-playlist          فقط همان ویدئو (پیش‌فرض)
+      --cookies BROWSER      مرورگر کوکی‌ها، مانند chrome یا firefox
+      --no-cookies           اجرا بدون کوکی مرورگر
+      --verbose              جزئیات فنی کامل yt-dlp برای عیب‌یابی
+      --dry-run              نمایش فرمان نهایی بدون دانلود
+
+مدیریت:
+      config                 تنظیمات تعاملی
+      doctor                 بررسی پیش‌نیازها و مسیرها
+      check-update           بررسی نسخهٔ برنامه و yt-dlp
+      update                 آپدیت برنامه و هستهٔ yt-dlp
+      update-core            فقط آپدیت هستهٔ yt-dlp
+  -h, --help                 نمایش راهنما
+  -V, --version              نمایش نسخه
+
+مثال:
+  youtube-gir --audio -q good 'https://youtu.be/VIDEO_ID'
+  youtube-gir --video --sponsorblock -o "$HOME/Videos" LINK
+  youtube-gir --playlist --archive LINK
+EOF
+}
+
+read_default() {
+  local prompt="$1" fallback="$2" answer
+  if [[ ! -r /dev/tty ]]; then
+    printf '%s' "$fallback"
+    return
+  fi
+  printf '%s' "$prompt" > /dev/tty
+  IFS= read -r answer < /dev/tty || answer=""
+  printf '%s' "${answer:-$fallback}"
+}
+
+choose_media() {
+  local answer
+  printf '\n%sنوع خروجی%s\n  1) 🎬 ویدئو + صدا\n  2) 🎵 فقط صدا\n' "$C_BOLD" "$C_RESET" > /dev/tty
+  answer="$(read_default 'انتخاب [1]: ' '1')"
+  case "$answer" in 2|audio|صدا) printf 'audio' ;; *) printf 'video' ;; esac
+}
+
+choose_quality() {
+  local answer
+  printf '\n%sکیفیت%s\n  1) ✨ عالی\n  2) 🚀 معمولی\n  3) 👍 خوب\n  4) 📦 پایین\n' "$C_BOLD" "$C_RESET" > /dev/tty
+  answer="$(read_default 'انتخاب [1]: ' '1')"
+  case "$answer" in 2|normal|معمولی) printf 'normal' ;; 3|good|خوب) printf 'good' ;; 4|low|پایین) printf 'low' ;; *) printf 'excellent' ;; esac
+}
+
+interactive_download() {
+  [[ -r /dev/tty ]] || die "برای حالت غیرتعاملی یک لینک بدهید."
+  printf '%s🎬 youtube-gir%s — دانلود تازه\n' "$C_BOLD" "$C_RESET"
+  local url media quality sponsor_answer playlist_answer
+  url="$(read_default '🔗 لینک: ' '')"
+  [[ -n "$url" ]] || die "لینک خالی است."
+  media="$(choose_media)"
+  quality="$(choose_quality)"
+  sponsor_answer="$(read_default 'حذف تبلیغات SponsorBlock؟ [y/N]: ' 'n')"
+  playlist_answer="$(read_default 'دانلود playlist کامل؟ [y/N]: ' 'n')"
+  CLI_MEDIA="$media"
+  CLI_QUALITY="$quality"
+  [[ "$sponsor_answer" =~ ^[Yy]$ ]] && CLI_SPONSOR="true"
+  [[ "$playlist_answer" =~ ^[Yy]$ ]] && CLI_PLAYLIST="true"
+  URLS=("$url")
+}
+
+interactive_config() {
+  [[ -r /dev/tty ]] || die "تنظیمات تعاملی به ترمینال نیاز دارد."
+  printf '%s⚙️  تنظیمات youtube-gir%s\n' "$C_BOLD" "$C_RESET"
+  printf 'برای حفظ مقدار فعلی Enter بزنید. مسیر خالی یعنی پوشهٔ جاری.\n\n'
+  local value
+  value="$(read_default "نوع پیش‌فرض (video/audio) [$default_media]: " "$default_media")"
+  [[ "$value" == "video" || "$value" == "audio" ]] && default_media="$value"
+  value="$(read_default "کیفیت پیش‌فرض (excellent/normal/good/low) [$default_quality]: " "$default_quality")"
+  if normalize_quality "$value" >/dev/null; then default_quality="$(normalize_quality "$value")"; fi
+  audio_dir="$(read_default "پوشهٔ صدا [${audio_dir:-پوشه جاری}] (برای خالی‌کردن: -): " "$audio_dir")"
+  video_dir="$(read_default "پوشهٔ ویدئو [${video_dir:-پوشه جاری}] (برای خالی‌کردن: -): " "$video_dir")"
+  [[ "$audio_dir" == "-" ]] && audio_dir=""
+  [[ "$video_dir" == "-" ]] && video_dir=""
+  cookies_browser="$(read_default "مرورگر کوکی [$cookies_browser]: " "$cookies_browser")"
+  value="$(read_default "استفاده از کوکی؟ (true/false) [$use_cookies]: " "$use_cookies")"
+  valid_bool "$value" && use_cookies="$value"
+  value="$(read_default "SponsorBlock پیش‌فرض؟ (true/false) [$sponsorblock]: " "$sponsorblock")"
+  valid_bool "$value" && sponsorblock="$value"
+  value="$(read_default "آرشیو دانلود پیش‌فرض؟ (true/false) [$use_archive]: " "$use_archive")"
+  valid_bool "$value" && use_archive="$value"
+  archive_file="$(read_default "فایل آرشیو [$archive_file]: " "$archive_file")"
+  save_config
+}
+
+find_ytdlp() {
+  if [[ -n "${YOUTUBE_GIR_YTDLP:-}" && -x "$YOUTUBE_GIR_YTDLP" ]]; then
+    printf '%s' "$YOUTUBE_GIR_YTDLP"
+  elif [[ -x "$HOME/.local/bin/yt-dlp" ]]; then
+    printf '%s' "$HOME/.local/bin/yt-dlp"
+  elif command -v yt-dlp >/dev/null 2>&1; then
+    command -v yt-dlp
+  else
+    return 1
+  fi
+}
+
+doctor() {
+  local failed=0 command_name version_line executable
+  printf '%s🩺 بررسی سیستم%s\n' "$C_BOLD" "$C_RESET"
+  for command_name in brew node deno yt-dlp ffmpeg curl; do
+    executable="$(command -v "$command_name" 2>/dev/null || true)"
+    if [[ "$command_name" == "yt-dlp" ]]; then executable="$(find_ytdlp || true)"; fi
+    if [[ -n "$executable" ]]; then
+      version_line="$("$executable" --version 2>/dev/null | head -n 1)"
+      ok "$command_name — $version_line"
+    else
+      warn "$command_name پیدا نشد."
+      failed=1
+    fi
+  done
+  info "کانفیگ: $CONFIG_FILE"
+  info "کش: $CACHE_HOME"
+  if [[ "$failed" -eq 0 ]]; then ok "سیستم آماده است."; else return 1; fi
+}
+
+github_latest_tag() {
+  local repository="$1"
+  curl -fsSL --connect-timeout 10 --max-time 25 \
+    -H 'Accept: application/vnd.github+json' \
+    "https://api.github.com/repos/$repository/releases/latest" \
+    2>/dev/null \
+    | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    | head -n 1
+}
+
+version_without_v() { printf '%s' "${1#v}"; }
+
+check_updates() {
+  command -v curl >/dev/null 2>&1 || die "curl نصب نیست."
+  local app_latest yt_current yt_latest yt_bin
+  info "در حال بررسی GitHub…"
+  app_latest="$(github_latest_tag "$REPOSITORY" || true)"
+  if [[ -z "$app_latest" ]]; then
+    warn "ریلیز عمومی برای youtube-gir پیدا نشد یا GitHub در دسترس نیست."
+  elif [[ "$(version_without_v "$app_latest")" == "$APP_VERSION" ]]; then
+    ok "youtube-gir به‌روز است ($APP_VERSION)."
+  else
+    info "نسخهٔ youtube-gir: نصب‌شده $APP_VERSION — آخرین $app_latest"
+  fi
+
+  yt_bin="$(find_ytdlp || true)"
+  if [[ -n "$yt_bin" ]]; then yt_current="$("$yt_bin" --version 2>/dev/null || true)"; else yt_current=""; fi
+  yt_latest="$(github_latest_tag 'yt-dlp/yt-dlp' || true)"
+  if [[ -z "$yt_current" ]]; then
+    warn "yt-dlp نصب نیست."
+  elif [[ "$(version_without_v "$yt_latest")" == "$(version_without_v "$yt_current")" ]]; then
+    ok "هستهٔ yt-dlp به‌روز است ($yt_current)."
+  elif [[ -n "$yt_latest" ]]; then
+    info "نسخهٔ yt-dlp: نصب‌شده $yt_current — آخرین $yt_latest"
+  else
+    warn "نسخهٔ جدید yt-dlp قابل بررسی نبود."
+  fi
+}
+
+update_core() {
+  local yt_bin
+  yt_bin="$(find_ytdlp)" || die "yt-dlp نصب نیست؛ ابتدا install.sh را اجرا کنید."
+  info "در حال آپدیت امن هستهٔ yt-dlp از کانال stable…"
+  if "$yt_bin" --update-to stable@latest; then
+    ok "هستهٔ yt-dlp آپدیت شد."
+  else
+    die "آپدیت خودکار yt-dlp شکست خورد. اگر با Homebrew نصب شده: brew upgrade yt-dlp"
+  fi
+}
+
+self_update() {
+  if ! command -v curl >/dev/null 2>&1; then
+    warn "curl نصب نیست؛ آپدیت برنامه انجام نشد."
+    return 1
+  fi
+  local latest temp_dir archive installer
+  latest="$(github_latest_tag "$REPOSITORY" || true)"
+  if [[ -z "$latest" ]]; then
+    warn "هیچ GitHub Release برای $REPOSITORY پیدا نشد؛ آپدیت برنامه رد شد."
+    return 1
+  fi
+  if [[ "$(version_without_v "$latest")" == "$APP_VERSION" ]]; then
+    ok "youtube-gir از قبل به‌روز است ($APP_VERSION)."
+    return
+  fi
+  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/youtube-gir.XXXXXX")" || die "ساخت پوشهٔ موقت شکست خورد."
+  archive="$temp_dir/release.tar.gz"
+  info "دریافت youtube-gir $latest از GitHub…"
+  if ! curl -fL --retry 3 -o "$archive" "https://github.com/$REPOSITORY/archive/refs/tags/$latest.tar.gz"; then
+    warn "دانلود آپدیت برنامه شکست خورد."
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  if ! tar -xzf "$archive" -C "$temp_dir"; then
+    warn "بازکردن آپدیت برنامه شکست خورد."
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  installer="$(find "$temp_dir" -mindepth 2 -maxdepth 2 -name install.sh -type f | head -n 1)"
+  if [[ -z "$installer" ]]; then
+    warn "install.sh در ریلیز پیدا نشد."
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  if ! bash "$installer" --no-deps; then
+    warn "نصب آپدیت برنامه شکست خورد."
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  rm -rf "$temp_dir"
+  ok "youtube-gir به $latest آپدیت شد."
+}
+
+update_all() {
+  self_update || warn "ادامه با آپدیت مستقل هستهٔ yt-dlp…"
+  update_core
+}
+
+build_download_args() {
+  local media="$1" quality="$2" destination="$3" fast="$4" playlist="$5"
+  local bitrate height archive_path
+  DOWNLOAD_ARGS=(
+    --newline
+    --progress
+    --progress-template 'download:📥 %(progress._percent_str)s | %(progress._speed_str)s | ETA %(progress._eta_str)s'
+    --retries 10
+    --fragment-retries 10
+    --file-access-retries 3
+    --cache-dir "$CACHE_HOME/yt-dlp"
+    --js-runtimes deno
+    --paths "$destination"
+    -o '%(title)s [%(id)s].%(ext)s'
+  )
+
+  if [[ "$media" == "audio" ]]; then
+    bitrate="$(audio_bitrate "$quality")"
+    DOWNLOAD_ARGS+=(
+      -f 'bestaudio[ext=m4a]/bestaudio/best'
+      --extract-audio
+      --audio-format m4a
+      --postprocessor-args "ExtractAudio+ffmpeg:-c:a aac -b:a $bitrate"
+      --parse-metadata '%(channel)s:%(meta_artist)s'
+    )
+  else
+    height="$(video_height "$quality")"
+    DOWNLOAD_ARGS+=(
+      -f "bestvideo[vcodec^=avc1][height<=$height]+bestaudio[ext=m4a]/bestvideo[vcodec^=avc1][height<=$height]+bestaudio/bestvideo[height<=$height]+bestaudio/best[height<=$height]/best"
+      --merge-output-format mp4
+      --postprocessor-args 'Merger+ffmpeg:-c:v copy -c:a aac -b:a 192k -ar 44100 -movflags +faststart'
+    )
+  fi
+
+  if [[ "$fast" != "true" ]]; then
+    [[ "$embed_thumbnail" == "true" ]] && DOWNLOAD_ARGS+=(--embed-thumbnail --convert-thumbnails jpg)
+    [[ "$embed_metadata" == "true" ]] && DOWNLOAD_ARGS+=(--embed-metadata --embed-chapters)
+  else
+    DOWNLOAD_ARGS+=(--concurrent-fragments 4)
+    [[ "$embed_metadata" == "true" ]] && DOWNLOAD_ARGS+=(--embed-metadata)
+  fi
+  [[ "$use_cookies" == "true" ]] && DOWNLOAD_ARGS+=(--cookies-from-browser "$cookies_browser")
+  [[ -n "$youtube_player_client" ]] && DOWNLOAD_ARGS+=(--extractor-args "youtube:player_client=$youtube_player_client")
+  [[ "$sponsorblock" == "true" ]] && DOWNLOAD_ARGS+=(--sponsorblock-remove 'sponsor,selfpromo')
+  if [[ "$use_archive" == "true" ]]; then
+    archive_path="$(expand_path "$archive_file")"
+    mkdir -p "$(dirname "$archive_path")" || die "ساخت پوشهٔ آرشیو ممکن نشد."
+    DOWNLOAD_ARGS+=(--download-archive "$archive_path")
+  fi
+  if [[ "$playlist" == "true" ]]; then DOWNLOAD_ARGS+=(--yes-playlist); else DOWNLOAD_ARGS+=(--no-playlist); fi
+}
+
+print_command() {
+  local item
+  printf '%q ' "$1"
+  shift
+  for item in "$@"; do printf '%q ' "$item"; done
+  printf '\n'
+}
+
+run_download() {
+  local media="$CLI_MEDIA" quality="$CLI_QUALITY" output_dir yt_bin
+  sponsorblock="$CLI_SPONSOR"
+  use_archive="$CLI_ARCHIVE"
+  use_cookies="$CLI_COOKIES"
+  cookies_browser="$CLI_BROWSER"
+  output_dir="$CLI_OUTPUT"
+  if [[ -z "$output_dir" ]]; then
+    if [[ "$media" == "audio" ]]; then output_dir="$audio_dir"; else output_dir="$video_dir"; fi
+  fi
+  output_dir="$(expand_path "${output_dir:-$PWD}")"
+  mkdir -p "$output_dir" || die "ساخت پوشهٔ خروجی ممکن نشد: $output_dir"
+  mkdir -p "$CACHE_HOME/yt-dlp" || die "ساخت پوشهٔ کش ممکن نشد: $CACHE_HOME"
+  build_download_args "$media" "$quality" "$output_dir" "$CLI_FAST" "$CLI_PLAYLIST"
+  [[ "$CLI_VERBOSE" == "true" ]] && DOWNLOAD_ARGS+=(--verbose)
+  yt_bin="$(find_ytdlp)" || die "yt-dlp پیدا نشد. install.sh را اجرا کنید یا PATH را اصلاح کنید."
+
+  info "نوع: $media | کیفیت: $quality | خروجی: $output_dir"
+  [[ "$sponsorblock" == "true" ]] && info "SponsorBlock فعال است."
+  [[ "$use_archive" == "true" ]] && info "آرشیو دانلود فعال است: $(expand_path "$archive_file")"
+  if [[ "$CLI_DRY_RUN" == "true" ]]; then
+    print_command "$yt_bin" "${DOWNLOAD_ARGS[@]}" "${URLS[@]}"
+    return
+  fi
+  printf '\n'
+  local status
+  "$yt_bin" "${DOWNLOAD_ARGS[@]}" "${URLS[@]}"
+  status=$?
+  if [[ "$status" -eq 0 ]]; then
+    ok "دانلود با موفقیت تمام شد: $output_dir"
+  else
+    printf '\n'
+    die "yt-dlp با کد خطای $status متوقف شد؛ خروجی کامل خطا در بالا نمایش داده شده است."
+  fi
+}
+
+main() {
+  load_config
+  CLI_MEDIA="$default_media"
+  CLI_QUALITY="$default_quality"
+  CLI_OUTPUT=""
+  CLI_FAST="false"
+  CLI_SPONSOR="$sponsorblock"
+  CLI_ARCHIVE="$use_archive"
+  CLI_COOKIES="$use_cookies"
+  CLI_BROWSER="$cookies_browser"
+  CLI_PLAYLIST="false"
+  CLI_DRY_RUN="false"
+  CLI_VERBOSE="false"
+  URLS=()
+
+  if [[ $# -eq 0 ]]; then
+    interactive_download
+    run_download
+    return
+  fi
+
+  case "$1" in
+    config) shift; interactive_config; return ;;
+    doctor) shift; doctor; return ;;
+    check-update) shift; check_updates; return ;;
+    update-core) shift; update_core; return ;;
+    update) shift; update_all; return ;;
+  esac
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -a|--audio) CLI_MEDIA="audio" ;;
+      -v|--video) CLI_MEDIA="video" ;;
+      -q|--quality)
+        [[ $# -ge 2 ]] || die "$1 به مقدار نیاز دارد."
+        CLI_QUALITY="$(normalize_quality "$2")" || die "کیفیت نامعتبر: $2"
+        shift
+        ;;
+      -o|--output)
+        [[ $# -ge 2 ]] || die "$1 به مسیر نیاز دارد."
+        CLI_OUTPUT="$2"
+        shift
+        ;;
+      --fast) CLI_FAST="true" ;;
+      --sponsorblock) CLI_SPONSOR="true" ;;
+      --no-sponsorblock) CLI_SPONSOR="false" ;;
+      --archive) CLI_ARCHIVE="true" ;;
+      --archive-file)
+        [[ $# -ge 2 ]] || die "$1 به فایل نیاز دارد."
+        CLI_ARCHIVE="true"; archive_file="$2"; shift
+        ;;
+      --playlist) CLI_PLAYLIST="true" ;;
+      --no-playlist) CLI_PLAYLIST="false" ;;
+      --cookies)
+        [[ $# -ge 2 ]] || die "$1 به نام مرورگر نیاز دارد."
+        CLI_COOKIES="true"; CLI_BROWSER="$2"; shift
+        ;;
+      --no-cookies) CLI_COOKIES="false" ;;
+      --verbose) CLI_VERBOSE="true" ;;
+      --dry-run) CLI_DRY_RUN="true" ;;
+      -h|--help) usage; return ;;
+      -V|--version) print_version; return ;;
+      --) shift; while [[ $# -gt 0 ]]; do URLS+=("$1"); shift; done; break ;;
+      -*) die "گزینهٔ ناشناخته: $1 (راهنما: youtube-gir --help)" ;;
+      *) URLS+=("$1") ;;
+    esac
+    shift
+  done
+
+  [[ ${#URLS[@]} -gt 0 ]] || die "لینکی وارد نشده است. برای حالت تعاملی فقط youtube-gir را اجرا کنید."
+  run_download
+}
+
+main "$@"
