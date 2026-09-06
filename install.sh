@@ -149,7 +149,9 @@ resolve_cli_source() {
   local script_dir latest ref temporary_dir candidate
   script_dir=""
   if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+    if ! script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"; then
+      script_dir=""
+    fi
     candidate="$script_dir/bin/youtube-gir"
     if [[ -f "$candidate" ]]; then
       SOURCE_CLI="$candidate"
