@@ -11,6 +11,10 @@ youtube-git 'https://youtu.be/px_WwBtcoTI'
 
 > نام اصلی برنامه و ریپو `youtube-gir` است. نصب‌کننده برای سازگاری، فرمان `youtube-git` را نیز به‌صورت alias می‌سازد.
 
+![نمای کلی نصب، منوی تعاملی و روند دانلود youtube-gir](Screenshot-1.png)
+
+<p align="center"><sub>نصب یک‌خطی، بررسی وابستگی‌ها، انتخاب نوع و کیفیت خروجی، خواندن Cookie و اجرای SponsorBlock</sub></p>
+
 ## ✨ امکانات
 
 - چهار کیفیت `excellent`، `normal`، `good` و `low` برای صوت و ویدئو
@@ -263,6 +267,33 @@ embed_metadata=true
 - کش: `~/.cache/youtube-gir/yt-dlp`
 - داده و آرشیو: `~/.local/share/youtube-gir/archive.txt`
 - متغیرهای `XDG_CONFIG_HOME`، `XDG_CACHE_HOME` و `XDG_DATA_HOME` پشتیبانی می‌شوند.
+
+## 🔐 Cookieهای Chrome و macOS Keychain
+
+Chrome مرورگر پیش‌فرض برنامه برای خواندن Cookie است:
+
+```ini
+cookies_browser=chrome
+use_cookies=true
+```
+
+Cookieهای مرورگر به yt-dlp کمک می‌کنند درخواست را با نشست واردشدهٔ شما انجام دهد و در بعضی شرایط از درخواست مجدد ورود یا CAPTCHA جلوگیری کند. این روش می‌تواند احتمال محدودشدن درخواست خودکار را کاهش دهد، اما عبور از تشخیص bot را تضمین نمی‌کند.
+
+در اولین اجرا روی macOS ممکن است پنجرهٔ دسترسی به `Chrome Safe Storage` نمایش داده شود:
+
+![پنجره دسترسی macOS Keychain برای Chrome Safe Storage](Screenshot-keychain.png)
+
+اگر خودتان فرمان `youtube-gir` را اجرا کرده‌اید و پنجره مطابق تصویر بالا است، رمز ورود macOS را وارد کنید و **Always Allow** را بزنید. با این انتخاب، ابزار `security` در اجراهای بعدی بدون نمایش دوبارهٔ این پنجره، کلید لازم برای رمزگشایی Cookieهای Chrome را دریافت می‌کند.
+
+نکات امنیتی:
+
+- فقط برای درخواستی که خودتان آغاز کرده‌اید **Always Allow** را انتخاب کنید.
+- اگر دسترسی دائمی نمی‌خواهید، **Allow** را انتخاب کنید؛ احتمالاً در اجراهای بعدی دوباره سؤال می‌شود.
+- انتخاب **Deny** معمولاً باعث شکست استخراج Cookie از Chrome می‌شود.
+- Cookieها اطلاعات حساس ورود هستند؛ آن‌ها را export، commit یا برای دیگران ارسال نکنید.
+- برای اجرای بدون Cookie از `youtube-gir --no-cookies LINK` استفاده کنید.
+
+این رفتار مطابق روش رسمی `--cookies-from-browser chrome` در [راهنمای yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/FAQ) و گزینه‌های دسترسی [macOS Keychain](https://support.apple.com/guide/keychain-access/if-youre-asked-for-access-to-your-keychain-kyca1243/mac) است.
 
 ## 🛡️ SponsorBlock و archive
 
