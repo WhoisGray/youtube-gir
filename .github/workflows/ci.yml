@@ -13,8 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Syntax check
-        run: bash -n bin/youtube-gir install.sh tests/cli_test.sh
+        run: bash -n bin/youtube-gir install.sh tests/cli_test.sh tests/installer_test.sh
       - name: CLI tests
         run: bash tests/cli_test.sh
+      - name: Installer tests
+        run: bash tests/installer_test.sh
       - name: ShellCheck
-        run: shellcheck bin/youtube-gir install.sh tests/cli_test.sh
+        run: shellcheck bin/youtube-gir install.sh tests/cli_test.sh tests/installer_test.sh

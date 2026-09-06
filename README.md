@@ -29,7 +29,23 @@ youtube-git 'https://youtu.be/px_WwBtcoTI'
 
 ## 📦 نصب
 
-### روش سریع
+### نصب یک‌خطی مستقیم از GitHub
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/WhoisGray/youtube-gir/main/install.sh | bash -s -- --yes
+```
+
+این فرمان حتی بدون clone کردن ریپو کار می‌کند. نصب‌کننده آخرین GitHub Release را پیدا می‌کند و اگر هنوز Release منتشر نشده باشد، نسخهٔ شاخهٔ `main` را می‌گیرد.
+
+> خود `youtube-gir` در `~/.local/bin` نصب می‌شود و به `sudo` نیاز ندارد. فقط نصب اولیهٔ Homebrew ممکن است برای ساخت مسیرهای سیستمی، از طریق نصب‌کنندهٔ رسمی خودش رمز مدیر بخواهد. کل فرمان بالا را با `sudo` اجرا نکنید؛ در غیر این صورت فایل‌ها ممکن است وارد Home کاربر root شوند.
+
+اگر Homebrew هنوز نصب نیست و سیستم برای آن دسترسی مدیر می‌خواهد، می‌توانید فقط مجوز sudo را پیشاپیش تأیید کنید و سپس نصب را با کاربر عادی ادامه دهید:
+
+```bash
+sudo -v && curl -fsSL https://raw.githubusercontent.com/WhoisGray/youtube-gir/main/install.sh | bash -s -- --yes
+```
+
+### نصب با clone
 
 ```bash
 git clone https://github.com/WhoisGray/youtube-gir.git
@@ -45,7 +61,15 @@ bash install.sh
 4. باینری release رسمی yt-dlp از `yt-dlp/yt-dlp` با بررسی SHA-256
 5. دو فرمان `youtube-gir` و `youtube-git` در `~/.local/bin`
 
-برای نصب بدون سؤال:
+در اجرای مجدد، نصب‌کننده این بررسی‌ها را انجام می‌دهد:
+
+- اجرای `brew update` و ارتقای Node.js و FFmpeg فقط در صورت وجود نسخهٔ جدید
+- بررسی و ارتقای Deno با updater مربوط به روش نصب آن
+- مقایسهٔ نسخهٔ محلی yt-dlp با آخرین GitHub Release؛ دانلود مجدد فقط در صورت نیاز
+- مقایسهٔ نسخهٔ محلی youtube-gir با نسخهٔ GitHub؛ نصب فقط وقتی نسخه تغییر کرده باشد
+- بازسازی alias `youtube-git` در صورت حذف‌شدن آن
+
+برای نصب بدون سؤال در حالت clone:
 
 ```bash
 bash install.sh --yes
@@ -57,10 +81,80 @@ bash install.sh --yes
 bash install.sh --no-deps
 ```
 
+برای نصب مجدد اجباری، حتی اگر شماره نسخه یکسان باشد:
+
+```bash
+bash install.sh --force
+```
+
 اگر `~/.local/bin` در `PATH` نیست، خطی را که نصب‌کننده نمایش می‌دهد به `~/.zshrc` یا `~/.bashrc` اضافه کنید. مسیر نصب را نیز می‌توان عوض کرد:
 
 ```bash
 YOUTUBE_GIR_BIN_DIR="$HOME/bin" bash install.sh --no-deps
+```
+
+## 🧰 نصب دستی پیش‌نیازها
+
+نصب‌کنندهٔ یک‌خطی همهٔ این موارد را خودش بررسی می‌کند. اگر ترجیح می‌دهید آن‌ها را دستی نصب کنید، مراحل زیر را انجام دهید.
+
+### 1. Homebrew
+
+روی macOS ابتدا Command Line Tools لازم است:
+
+```bash
+xcode-select --install
+```
+
+سپس Homebrew را با دستور رسمی نصب کنید:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+همین نصب‌کننده روی توزیع‌های پشتیبانی‌شدهٔ Linux نیز کار می‌کند. در Linux ممکن است ابتدا ابزارهایی مانند `build-essential` و `curl` را با package manager سیستم نصب کنید.
+
+### 2. Node.js و FFmpeg
+
+```bash
+brew install node ffmpeg
+```
+
+### 3. Deno
+
+```bash
+curl -fsSL https://deno.land/install.sh | sh
+export PATH="$HOME/.deno/bin:$PATH"
+```
+
+### 4. yt-dlp رسمی
+
+macOS:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+curl -fL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos -o "$HOME/.local/bin/yt-dlp"
+chmod 0755 "$HOME/.local/bin/yt-dlp"
+```
+
+Linux روی x86_64:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+curl -fL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o "$HOME/.local/bin/yt-dlp"
+chmod 0755 "$HOME/.local/bin/yt-dlp"
+```
+
+برای Linux ARM64 نام فایل `yt-dlp_linux_aarch64` است. نصب‌کنندهٔ خود پروژه معماری را خودکار تشخیص می‌دهد و checksum رسمی `SHA2-256SUMS` را نیز کنترل می‌کند، بنابراین روش پیشنهادی همان نصب یک‌خطی است.
+
+### 5. بررسی سیستم
+
+```bash
+export PATH="$HOME/.local/bin:$HOME/.deno/bin:$PATH"
+youtube-gir doctor
+node --version
+deno --version
+yt-dlp --version
+ffmpeg -version
 ```
 
 ## 🚀 استفاده
@@ -150,7 +244,7 @@ audio_dir=
 video_dir=
 cookies_browser=chrome
 use_cookies=true
-sponsorblock=false
+sponsorblock=true
 use_archive=false
 archive_file=~/.local/share/youtube-gir/archive.txt
 youtube_player_client=mweb
@@ -218,9 +312,10 @@ youtube-gir doctor
 ## 🧪 توسعه
 
 ```bash
-bash -n bin/youtube-gir install.sh tests/cli_test.sh
+bash -n bin/youtube-gir install.sh tests/cli_test.sh tests/installer_test.sh
 bash tests/cli_test.sh
-shellcheck bin/youtube-gir install.sh tests/cli_test.sh
+bash tests/installer_test.sh
+shellcheck bin/youtube-gir install.sh tests/cli_test.sh tests/installer_test.sh
 ```
 
 GitHub Actions همین سه بررسی را روی push و pull request اجرا می‌کند. برای انتشار نسخه، شمارهٔ `APP_VERSION` در `bin/youtube-gir` را تغییر دهید و tag هم‌نام مانند `v1.0.0` بسازید.
@@ -240,3 +335,11 @@ GitHub Actions همین سه بررسی را روی push و pull request اجر�
 ## مجوز
 
 [MIT](LICENSE)
+
+---
+
+## ⬇️ نصب مستقیم نهایی
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/WhoisGray/youtube-gir/main/install.sh | bash -s -- --yes
+```

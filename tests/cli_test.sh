@@ -31,6 +31,13 @@ output="$(bash "$PROJECT_DIR/bin/youtube-gir" --dry-run --no-cookies 'https://yo
 assert_contains "$output" 'height\<=1080'
 assert_contains "$output" '--no-playlist'
 assert_contains "$output" '--cache-dir'
+assert_contains "$output" '--sponsorblock-remove sponsor\,selfpromo'
+
+output="$(bash "$PROJECT_DIR/bin/youtube-gir" --no-sponsorblock --dry-run --no-cookies 'https://youtu.be/test')"
+if [[ "$output" == *'--sponsorblock-remove'* ]]; then
+  printf 'SponsorBlock was not disabled by --no-sponsorblock\n' >&2
+  exit 1
+fi
 
 output="$(bash "$PROJECT_DIR/bin/youtube-gir" --audio -q low --sponsorblock --archive --dry-run --no-cookies 'https://youtu.be/test')"
 assert_contains "$output" '--audio-format m4a'
