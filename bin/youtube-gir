@@ -26,6 +26,21 @@ CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/youtube-gir"
 CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}/youtube-gir"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/youtube-gir"
 CONFIG_FILE="$CONFIG_HOME/config"
+RUN_TEMP_DIR=""
+
+cleanup_run_temp() {
+  local run_root="$CACHE_HOME/runs"
+  if [[ -n "$RUN_TEMP_DIR" && "$RUN_TEMP_DIR" == "$run_root"/run.* && -d "$RUN_TEMP_DIR" ]]; then
+    rm -rf "$RUN_TEMP_DIR"
+  fi
+  RUN_TEMP_DIR=""
+  return 0
+}
+
+trap cleanup_run_temp EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 default_media="video"
 default_quality="excellent"
@@ -214,16 +229,14 @@ choose_quality() {
 interactive_download() {
   [[ -r /dev/tty ]] || die "Provide a URL when running without an interactive terminal."
   printf '%s🎬 youtube-gir%s — new download\n' "$C_BOLD" "$C_RESET"
-  local url media quality sponsor_answer playlist_answer
+  local url media quality playlist_answer
   url="$(read_default '🔗 URL: ' '')"
   [[ -n "$url" ]] || die "The URL cannot be empty."
   media="$(choose_media)"
   quality="$(choose_quality)"
-  sponsor_answer="$(read_default 'Remove SponsorBlock segments? [Y/n]: ' 'y')"
   playlist_answer="$(read_default 'Download the complete playlist? [y/N]: ' 'n')"
   CLI_MEDIA="$media"
   CLI_QUALITY="$quality"
-  if [[ "$sponsor_answer" =~ ^[Yy]$ ]]; then CLI_SPONSOR="true"; else CLI_SPONSOR="false"; fi
   [[ "$playlist_answer" =~ ^[Yy]$ ]] && CLI_PLAYLIST="true"
   URLS=("$url")
 }
@@ -382,7 +395,7 @@ update_all() {
 }
 
 build_download_args() {
-  local media="$1" quality="$2" destination="$3" fast="$4" playlist="$5"
+  local media="$1" quality="$2" destination="$3" fast="$4" playlist="$5" temporary_dir="$6"
   local bitrate height archive_path
   DOWNLOAD_ARGS=(
     --newline
@@ -393,7 +406,8 @@ build_download_args() {
     --file-access-retries 3
     --cache-dir "$CACHE_HOME/yt-dlp"
     --js-runtimes deno
-    --paths "$destination"
+    --paths "home:$destination"
+    --paths "temp:$temporary_dir"
     -o '%(title)s [%(id)s].%(ext)s'
   )
 
@@ -442,7 +456,7 @@ print_command() {
 }
 
 run_download() {
-  local media="$CLI_MEDIA" quality="$CLI_QUALITY" output_dir yt_bin
+  local media="$CLI_MEDIA" quality="$CLI_QUALITY" output_dir yt_bin run_root
   sponsorblock="$CLI_SPONSOR"
   use_archive="$CLI_ARCHIVE"
   use_cookies="$CLI_COOKIES"
@@ -454,7 +468,10 @@ run_download() {
   output_dir="$(expand_path "${output_dir:-$PWD}")"
   mkdir -p "$output_dir" || die "Could not create the output directory: $output_dir"
   mkdir -p "$CACHE_HOME/yt-dlp" || die "Could not create the cache directory: $CACHE_HOME"
-  build_download_args "$media" "$quality" "$output_dir" "$CLI_FAST" "$CLI_PLAYLIST"
+  run_root="$CACHE_HOME/runs"
+  mkdir -p "$run_root" || die "Could not create the temporary download directory: $run_root"
+  RUN_TEMP_DIR="$(mktemp -d "$run_root/run.XXXXXX")" || die "Could not create a temporary download directory."
+  build_download_args "$media" "$quality" "$output_dir" "$CLI_FAST" "$CLI_PLAYLIST" "$RUN_TEMP_DIR"
   [[ "$CLI_VERBOSE" == "true" ]] && DOWNLOAD_ARGS+=(--verbose)
   yt_bin="$(find_ytdlp)" || die "yt-dlp was not found. Run install.sh or fix your PATH."
 
@@ -470,6 +487,7 @@ run_download() {
   "$yt_bin" "${DOWNLOAD_ARGS[@]}" "${URLS[@]}"
   status=$?
   if [[ "$status" -eq 0 ]]; then
+    cleanup_run_temp
     ok "Download completed successfully: $output_dir"
   else
     printf '\n'

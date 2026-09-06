@@ -13,7 +13,7 @@ youtube-git 'https://youtu.be/px_WwBtcoTI'
 
 ![نمای کلی نصب، منوی تعاملی و روند دانلود youtube-gir](Screenshot-1.png)
 
-<p align="center"><sub>نصب یک‌خطی، بررسی وابستگی‌ها، انتخاب نوع و کیفیت خروجی، خواندن Cookie و اجرای SponsorBlock</sub></p>
+<p align="center"><sub>نصب یک‌خطی، بررسی وابستگی‌ها، انتخاب نوع و کیفیت خروجی، خواندن Cookie و اجرای SponsorBlock. در نسخهٔ فعلی سؤال SponsorBlock نمایش داده نمی‌شود و این قابلیت پیش‌فرض فعال است.</sub></p>
 
 ## ✨ امکانات
 
@@ -24,7 +24,7 @@ youtube-git 'https://youtu.be/px_WwBtcoTI'
 - استخراج کوکی از Chrome (قابل تغییر به Firefox و مرورگرهای پشتیبانی‌شده)
 - حذف خودکار بخش‌های `sponsor` و `selfpromo` با SponsorBlock
 - فایل archive برای ردکردن ویدئوهایی که قبلاً دانلود شده‌اند
-- کش پایدار yt-dlp، retry خودکار و نمایش درصد، سرعت، ETA و خطای کامل
+- کش متمرکز، پاک‌سازی خودکار فایل‌های موقت، retry و نمایش درصد، سرعت، ETA و خطای کامل
 - metadata، chapter و thumbnail قابل جاسازی
 - بررسی نسخهٔ برنامه و yt-dlp مستقیماً از GitHub
 - آپدیت هستهٔ رسمی yt-dlp و self-update برنامه
@@ -265,8 +265,11 @@ embed_metadata=true
 مسیرهای استاندارد دیگر:
 
 - کش: `~/.cache/youtube-gir/yt-dlp`
+- فایل‌های موقت هر اجرا: `~/.cache/youtube-gir/runs/run.XXXXXX`
 - داده و آرشیو: `~/.local/share/youtube-gir/archive.txt`
 - متغیرهای `XDG_CONFIG_HOME`، `XDG_CACHE_HOME` و `XDG_DATA_HOME` پشتیبانی می‌شوند.
+
+تمام فایل‌های میانی مانند `.part`، streamهای صوت/تصویر و thumbnail تبدیل‌شده ابتدا داخل پوشهٔ موقت همان اجرا نوشته می‌شوند. فقط فایل نهایی پس از تکمیل دانلود به پوشهٔ خروجی منتقل می‌شود. پوشهٔ موقت در پایان موفق، هنگام خطا و پس از `Ctrl+C` به‌صورت خودکار حذف می‌شود؛ بنابراین فایل‌های ناقص کنار خروجی پخش نخواهند شد.
 
 ## 🔐 Cookieهای Chrome و macOS Keychain
 
@@ -297,15 +300,16 @@ Cookieهای مرورگر به yt-dlp کمک می‌کنند درخواست را
 
 ## 🛡️ SponsorBlock و archive
 
-فعال‌سازی فقط برای یک اجرا:
+SponsorBlock به‌صورت پیش‌فرض فعال است. archive را می‌توان برای یک اجرا فعال کرد:
 
 ```bash
-youtube-gir --sponsorblock LINK
 youtube-gir --archive LINK
 youtube-gir --archive-file "$HOME/.downloads.archive" LINK
 ```
 
-برای فعال‌بودن دائمی، `sponsorblock=true` یا `use_archive=true` را در کانفیگ قرار دهید. با `--no-sponsorblock` می‌توانید تنظیم دائمی SponsorBlock را برای یک اجرا خاموش کنید.
+SponsorBlock در نصب تازه به‌صورت پیش‌فرض فعال است و در حالت تعاملی دربارهٔ آن سؤال نمی‌شود. برنامه مستقیماً بخش‌های `sponsor` و `selfpromo` را حذف می‌کند. برای غیرفعال‌کردن موقت از `--no-sponsorblock` و برای غیرفعال‌کردن دائمی از `sponsorblock=false` در کانفیگ استفاده کنید.
+
+برای فعال‌بودن دائمی archive، مقدار `use_archive=true` را در کانفیگ قرار دهید.
 
 `--archive` فقط شناسهٔ دانلود موفق را ثبت می‌کند و جلوی دانلود دوباره را می‌گیرد؛ فایل رسانه را حذف نمی‌کند.
 

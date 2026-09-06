@@ -32,6 +32,16 @@ assert_contains "$output" 'height\<=1080'
 assert_contains "$output" '--no-playlist'
 assert_contains "$output" '--cache-dir'
 assert_contains "$output" '--sponsorblock-remove sponsor\,selfpromo'
+if grep -q 'Remove SponsorBlock segments?' "$PROJECT_DIR/bin/youtube-gir"; then
+  printf 'Interactive mode still contains a SponsorBlock prompt\n' >&2
+  exit 1
+fi
+assert_contains "$output" '--paths home:'
+assert_contains "$output" '--paths temp:'
+if find "$XDG_CACHE_HOME/youtube-gir/runs" -mindepth 1 -print -quit | grep -q .; then
+  printf 'Dry-run left files in the per-run temporary directory\n' >&2
+  exit 1
+fi
 
 output="$(bash "$PROJECT_DIR/bin/youtube-gir" --no-sponsorblock --dry-run --no-cookies 'https://youtu.be/test')"
 if [[ "$output" == *'--sponsorblock-remove'* ]]; then
@@ -56,6 +66,22 @@ fi
 
 output="$(bash "$PROJECT_DIR/bin/youtube-gir" --verbose --dry-run --no-cookies 'https://youtu.be/test')"
 assert_contains "$output" '--verbose'
+
+cat > "$TEST_DIR/bin/yt-dlp-fail" <<'EOF'
+#!/usr/bin/env bash
+exit 23
+EOF
+chmod +x "$TEST_DIR/bin/yt-dlp-fail"
+export YOUTUBE_GIR_YTDLP="$TEST_DIR/bin/yt-dlp-fail"
+if bash "$PROJECT_DIR/bin/youtube-gir" --no-cookies 'https://youtu.be/test' >/dev/null 2>&1; then
+  printf 'The simulated failed download unexpectedly succeeded\n' >&2
+  exit 1
+fi
+if find "$XDG_CACHE_HOME/youtube-gir/runs" -mindepth 1 -print -quit | grep -q .; then
+  printf 'Failed download left files in the per-run temporary directory\n' >&2
+  exit 1
+fi
+export YOUTUBE_GIR_YTDLP="$TEST_DIR/bin/yt-dlp"
 
 mkdir -p "$XDG_CONFIG_HOME/youtube-gir"
 cat > "$XDG_CONFIG_HOME/youtube-gir/config" <<EOF
