@@ -49,4 +49,11 @@ output="$(cd "$TEST_ROOT" && bash -s -- --no-deps < "$TEST_ROOT/standalone/insta
 [[ "$output" == *'Downloading youtube-gir from GitHub'* ]]
 [[ -x "$YOUTUBE_GIR_BIN_DIR/youtube-gir" ]]
 
+rm -rf "$YOUTUBE_GIR_BIN_DIR"
+output="$(YOUTUBE_GIR_OS=windows bash "$TEST_ROOT/standalone/install.sh" --no-deps --force)"
+[[ "$output" == *'youtube-gir 1.0.0 was installed'* ]]
+[[ -x "$YOUTUBE_GIR_BIN_DIR/youtube-gir" ]]
+[[ -f "$YOUTUBE_GIR_BIN_DIR/youtube-git" && ! -L "$YOUTUBE_GIR_BIN_DIR/youtube-git" ]]
+grep -q 'youtube-gir' "$YOUTUBE_GIR_BIN_DIR/youtube-git"
+
 printf '✅ Installer tests passed\n'

@@ -29,7 +29,8 @@ youtube-git 'https://youtu.be/px_WwBtcoTI'
 - بررسی نسخهٔ برنامه و yt-dlp مستقیماً از GitHub
 - آپدیت هستهٔ رسمی yt-dlp و self-update برنامه
 - کانفیگ امن `key=value` که به‌عنوان کد shell اجرا نمی‌شود
-- سازگار با macOS و Linux روی Bash 3.2+
+- سازگار با macOS، Linux و Windows (Git Bash / WSL) روی Bash 3.2+
+- تشخیص خودکار سیستمعامل و انتخاب باینری و مسیر نصب مناسب برای macOS / Linux / Windows
 
 ## 📦 نصب
 
@@ -59,11 +60,13 @@ bash install.sh
 
 نصب‌کننده موارد زیر را بررسی یا نصب می‌کند:
 
-1. Homebrew با نصب‌کنندهٔ رسمی `brew.sh`
-2. Node.js و FFmpeg از Homebrew
-3. Deno با نصب‌کنندهٔ رسمی `deno.land`
-4. باینری release رسمی yt-dlp از `yt-dlp/yt-dlp` با بررسی SHA-256
+1. Homebrew با نصب‌کنندهٔ رسمی `brew.sh` (فقط macOS/Linux؛ روی Windows به‌جای آن پیش‌نیازها با winget نصب می‌شوند)
+2. Node.js و FFmpeg (روی macOS/Linux از Homebrew، روی Windows از winget)
+3. Deno (روی macOS/Linux از `deno.land`، روی Windows از winget)
+4. باینری release رسمی yt-dlp از `yt-dlp/yt-dlp` با بررسی SHA-256؛ نام فایل بر اساس سیستمعامل انتخاب می‌شود: `yt-dlp_macos`، `yt-dlp_linux` یا `yt-dlp.exe`
 5. دو فرمان `youtube-gir` و `youtube-git` در `~/.local/bin`
+
+نصب‌کننده در ابتدای کار سیستمعامل را با `uname` تشخیص می‌دهد و مسیرها و باینری‌های متناسب با آن را انتخاب می‌کند؛ برای شبیه‌سازی می‌توان آن را با متغیر `YOUTUBE_GIR_OS` (مقادیر `macos`، `linux`، `windows`) override کرد.
 
 در اجرای مجدد، نصب‌کننده این بررسی‌ها را انجام می‌دهد:
 
@@ -96,6 +99,27 @@ bash install.sh --force
 ```bash
 YOUTUBE_GIR_BIN_DIR="$HOME/bin" bash install.sh --no-deps
 ```
+
+### نصب روی Windows
+
+برنامه و نصب‌کننده روی Windows با **Git Bash** کار می‌کنند (روی WSL همه‌چیز مانند Linux است). مراحل:
+
+1. **Git for Windows** را نصب کنید که شامل Git Bash می‌شود.
+2. پیش‌نیازها را با winget نصب کنید، یا بگذارید نصب‌کنندهٔ یک‌خطی خودش آن‌ها را بررسی و نصب کند:
+
+   ```bash
+   winget install --id OpenJS.NodeJS.LTS
+   winget install --id Gyan.FFmpeg
+   winget install --id DenoLand.Deno
+   ```
+
+3. همان فرمان نصب یک‌خطی را داخل Git Bash اجرا کنید:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/WhoisGray/youtube-gir/main/install.sh | bash -s -- --yes
+   ```
+
+نصب‌کننده روی Windows از Homebrew استفاده نمی‌کند. در این حالت پیش‌نیازها را با winget نصب می‌کند، باینری رسمی `yt-dlp.exe` را همراه کنترل SHA-256 در `~/.local/bin` قرار می‌دهد و برای سازگاری، فرمان `youtube-git` را به‌صورت یک فایل اجرایی کوچک (به‌جای symlink) می‌سازد. پس از نصب، پنجرهٔ Git Bash را دوباره باز کنید تا ابزارهای تازه‌نصب‌شده از طریق PATH در دسترس باشند.
 
 ## 🧰 نصب دستی پیش‌نیازها
 
@@ -148,7 +172,15 @@ curl -fL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux 
 chmod 0755 "$HOME/.local/bin/yt-dlp"
 ```
 
-برای Linux ARM64 نام فایل `yt-dlp_linux_aarch64` است. نصب‌کنندهٔ خود پروژه معماری را خودکار تشخیص می‌دهد و checksum رسمی `SHA2-256SUMS` را نیز کنترل می‌کند، بنابراین روش پیشنهادی همان نصب یک‌خطی است.
+برای Linux ARM64 نام فایل `yt-dlp_linux_aarch64` است. Windows فقط یک فایل `yt-dlp.exe` دارد:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+curl -fL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe -o "$HOME/.local/bin/yt-dlp.exe"
+chmod 0755 "$HOME/.local/bin/yt-dlp.exe"
+```
+
+نصب‌کنندهٔ خود پروژه سیستمعامل و معماری را خودکار تشخیص می‌دهد، برای Windows باینری `yt-dlp.exe` را برمی‌گزیند و checksum رسمی `SHA2-256SUMS` را نیز کنترل می‌کند؛ بنابراین روش پیشنهادی همان نصب یک‌خطی است.
 
 ### 5. بررسی سیستم
 
@@ -286,6 +318,8 @@ Cookieهای مرورگر به yt-dlp کمک می‌کنند درخواست را
 
 ![پنجره دسترسی macOS Keychain برای Chrome Safe Storage](Screenshot-keychain.png)
 
+روی Linux و Windows همان Cookie‌ها با مکانیزم رمزگشایی مربوط به همان سیستمعامل (مثلاً keyring در Linux) خوانده می‌شوند و معمولاً پنجرهٔ جداگانه‌ای مانند Keychain نمایش داده نمی‌شود.
+
 اگر خودتان فرمان `youtube-gir` را اجرا کرده‌اید و پنجره مطابق تصویر بالا است، رمز ورود macOS را وارد کنید و **Always Allow** را بزنید. با این انتخاب، ابزار `security` در اجراهای بعدی بدون نمایش دوبارهٔ این پنجره، کلید لازم برای رمزگشایی Cookieهای Chrome را دریافت می‌کند.
 
 نکات امنیتی:
@@ -338,6 +372,7 @@ youtube-gir doctor
 
 چند نکتهٔ رایج:
 
+- خروجی `doctor` سیستمعامل شناسایی‌شده را هم نمایش می‌دهد. اگر تشخیص درست نبود، متغیر `YOUTUBE_GIR_OS` را با مقدار `macos`، `linux` یا `windows` به‌صورت دستی تنظیم کنید.
 - برای خطای cookie، Chrome را کامل ببندید یا از `--cookies firefox` / `--no-cookies` استفاده کنید.
 - اگر YouTube ساختار player را تغییر داد، ابتدا `youtube-gir update-core` را اجرا کنید.
 - برنامه stderr و stdout مربوط به yt-dlp/FFmpeg را پنهان نمی‌کند؛ خطای کامل بالای پیام نهایی باقی می‌ماند. برای گزارش تشخیصی گسترده‌تر از `--verbose` استفاده کنید.

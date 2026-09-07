@@ -24,9 +24,21 @@ for argument in "$@"; do
   esac
 done
 
+detect_os() {
+  case "$(uname -s)" in
+    Darwin) printf 'macos' ;;
+    Linux) printf 'linux' ;;
+    MINGW*|MSYS*|CYGWIN*) printf 'windows' ;;
+    *) printf 'unknown' ;;
+  esac
+}
+
+OS_NAME="${YOUTUBE_GIR_OS:-$(detect_os)}"
+
 log() { printf 'ℹ️  %s\n' "$*"; }
 done_message() { printf '✅ %s\n' "$*"; }
 fail() { printf '❌ %s\n' "$*" >&2; exit 1; }
+warn() { printf '⚠️  %s\n' "$*" >&2; }
 
 cleanup() {
   local path
@@ -54,7 +66,7 @@ version_without_v() { printf '%s' "${1#v}"; }
 
 bootstrap_brew() {
   command -v brew >/dev/null 2>&1 && return
-  [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]] || fail "Homebrew is supported only on macOS and Linux."
+  case "$OS_NAME" in macos|linux) ;; *) fail "Homebrew is supported only on macOS and Linux." ;; esac
   if [[ "$ASSUME_YES" != "true" && -t 0 ]]; then
     printf 'Homebrew is not installed. Run the official brew.sh installer? [y/N] '
     read -r answer
@@ -110,20 +122,32 @@ sha256_file() {
   else shasum -a 256 "$1" | awk '{print $1}'; fi
 }
 
+install_binary() {
+  local source_file="$1" destination="$2"
+  if command -v install >/dev/null 2>&1; then
+    install -m 0755 "$source_file" "$destination"
+  else
+    cp -f "$source_file" "$destination"
+    chmod 0755 "$destination"
+  fi
+}
+
 install_or_update_ytdlp() {
-  local system machine asset temporary_dir binary sums expected actual latest installed
-  system="$(uname -s)"
+  local machine asset yt_name temporary_dir binary sums expected actual latest installed
   machine="$(uname -m)"
-  case "$system:$machine" in
-    Darwin:*) asset="yt-dlp_macos" ;;
-    Linux:x86_64|Linux:amd64) asset="yt-dlp_linux" ;;
-    Linux:aarch64|Linux:arm64) asset="yt-dlp_linux_aarch64" ;;
-    *) fail "No official yt-dlp binary is configured for $system/$machine." ;;
+  case "$OS_NAME:$machine" in
+    macos:*) asset="yt-dlp_macos" ;;
+    linux:x86_64|linux:amd64) asset="yt-dlp_linux" ;;
+    linux:aarch64|linux:arm64) asset="yt-dlp_linux_aarch64" ;;
+    windows:*) asset="yt-dlp.exe" ;;
+    *) fail "No official yt-dlp binary is configured for $OS_NAME/$machine." ;;
   esac
+  yt_name="yt-dlp"
+  [[ "$OS_NAME" == "windows" ]] && yt_name="yt-dlp.exe"
 
   latest="$(github_latest_tag 'yt-dlp/yt-dlp' || true)"
   installed=""
-  if [[ -x "$INSTALL_DIR/yt-dlp" ]]; then installed="$("$INSTALL_DIR/yt-dlp" --version 2>/dev/null || true)"; fi
+  if [[ -x "$INSTALL_DIR/$yt_name" ]]; then installed="$("$INSTALL_DIR/$yt_name" --version 2>/dev/null || true)"; fi
   if [[ "$FORCE_INSTALL" != "true" && -n "$latest" && "$(version_without_v "$latest")" == "$(version_without_v "$installed")" ]]; then
     done_message "yt-dlp is up to date ($installed)."
     return
@@ -141,8 +165,27 @@ install_or_update_ytdlp() {
   actual="$(sha256_file "$binary")"
   [[ "$actual" == "$expected" ]] || fail "The yt-dlp SHA-256 verification failed."
   mkdir -p "$INSTALL_DIR"
-  install -m 0755 "$binary" "$INSTALL_DIR/yt-dlp"
+  install_binary "$binary" "$INSTALL_DIR/$yt_name"
   done_message "yt-dlp ${latest:-latest} was installed."
+}
+
+install_windows_deps() {
+  if ! command -v winget >/dev/null 2>&1; then
+    warn "winget (Windows Package Manager) was not found. Install Node.js, FFmpeg and Deno manually, then run install.sh --no-deps."
+    return 0
+  fi
+  local name package_id spec
+  for spec in "node:OpenJS.NodeJS.LTS" "ffmpeg:Gyan.FFmpeg" "deno:DenoLand.Deno"; do
+    name="${spec%%:*}"
+    package_id="${spec#*:}"
+    if command -v "$name" >/dev/null 2>&1; then
+      done_message "$name is already available."
+    else
+      log "Installing $name with winget…"
+      winget install --id "$package_id" --exact --silent --accept-package-agreements --accept-source-agreements >/dev/null 2>&1 \
+        || warn "$name installation failed; install it manually and re-run install.sh."
+    fi
+  done
 }
 
 resolve_cli_source() {
@@ -169,6 +212,18 @@ resolve_cli_source() {
   SOURCE_CLI="$candidate"
 }
 
+install_alias() {
+  if [[ "$OS_NAME" == "windows" ]]; then
+    cat > "$INSTALL_DIR/youtube-git" <<'EOF'
+#!/usr/bin/env bash
+exec "$(dirname "$0")/youtube-gir" "$@"
+EOF
+    chmod 0755 "$INSTALL_DIR/youtube-git"
+  else
+    ln -sf "$INSTALL_DIR/youtube-gir" "$INSTALL_DIR/youtube-git"
+  fi
+}
+
 install_or_update_app() {
   local source_cli="$1" candidate_version installed_version
   candidate_version="$(sed -n 's/^readonly APP_VERSION="\([^"]*\)"/\1/p' "$source_cli" | head -n 1)"
@@ -181,10 +236,10 @@ install_or_update_app() {
   if [[ "$FORCE_INSTALL" != "true" && "$installed_version" == "$candidate_version" ]]; then
     done_message "youtube-gir is up to date ($installed_version)."
   else
-    install -m 0755 "$source_cli" "$INSTALL_DIR/youtube-gir"
+    install_binary "$source_cli" "$INSTALL_DIR/youtube-gir"
     done_message "youtube-gir $candidate_version was installed."
   fi
-  ln -sf "$INSTALL_DIR/youtube-gir" "$INSTALL_DIR/youtube-git"
+  install_alias
 }
 
 command -v curl >/dev/null 2>&1 || fail "curl is required for installation."
@@ -192,12 +247,16 @@ SOURCE_CLI=""
 resolve_cli_source
 
 if [[ "$INSTALL_DEPS" == "true" ]]; then
-  bootstrap_brew
-  log "Updating the Homebrew package index…"
-  brew update
-  update_brew_formula node Node.js
-  update_brew_formula ffmpeg FFmpeg
-  install_or_update_deno
+  if [[ "$OS_NAME" == "windows" ]]; then
+    install_windows_deps
+  else
+    bootstrap_brew
+    log "Updating the Homebrew package index…"
+    brew update
+    update_brew_formula node Node.js
+    update_brew_formula ffmpeg FFmpeg
+    install_or_update_deno
+  fi
   install_or_update_ytdlp
 fi
 

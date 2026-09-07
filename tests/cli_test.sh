@@ -43,6 +43,16 @@ if find "$XDG_CACHE_HOME/youtube-gir/runs" -mindepth 1 -print -quit | grep -q .;
   exit 1
 fi
 
+mkdir -p "$TEST_DIR/home/.local/bin"
+cat > "$TEST_DIR/home/.local/bin/yt-dlp.exe" <<'EOF'
+#!/usr/bin/env bash
+printf 'fake yt-dlp.exe\n'
+EOF
+chmod +x "$TEST_DIR/home/.local/bin/yt-dlp.exe"
+output="$(env -u YOUTUBE_GIR_YTDLP YOUTUBE_GIR_OS=windows bash "$PROJECT_DIR/bin/youtube-gir" --dry-run --no-cookies 'https://youtu.be/test')"
+assert_contains "$output" 'yt-dlp.exe'
+assert_contains "$output" '--no-playlist'
+
 output="$(bash "$PROJECT_DIR/bin/youtube-gir" --no-sponsorblock --dry-run --no-cookies 'https://youtu.be/test')"
 if [[ "$output" == *'--sponsorblock-remove'* ]]; then
   printf 'SponsorBlock was not disabled by --no-sponsorblock\n' >&2
