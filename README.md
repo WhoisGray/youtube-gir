@@ -34,6 +34,35 @@ All four phases below are in this tree.
 
 **Phase 4 — Resume and operations.** Dedicated temp directory, interrupt handling that keeps `.part` files, requeue after a restart, Docker volumes, health checks, and a yt-dlp update endpoint.
 
+## Downloads
+
+A `v*` tag publishes a GitHub release with the server and the extension. The file list and checksums are on the release. Current builds:
+
+| File | Machine |
+| --- | --- |
+| `youtubegir-<tag>-darwin-arm64` | Mac, Apple silicon |
+| `youtubegir-<tag>-darwin-amd64` | Mac, Intel |
+| `youtubegir-<tag>-linux-amd64` | Linux, 64-bit |
+| `youtubegir-<tag>-linux-arm64` | Linux, ARM 64-bit |
+| `youtubegir-<tag>-windows-amd64.exe` | Windows, 64-bit |
+| `youtube-gir-extension-<tag>.zip` | Chrome extension |
+
+https://github.com/WhoisGray/youtube-gir/releases
+
+The server binary does not include yt-dlp, ffmpeg, or deno. Install those beside it.
+
+```bash
+chmod +x youtubegir-v1.0.0-darwin-arm64
+export ADMIN_KEY="$(openssl rand -hex 32)"
+export ADDR=127.0.0.1:6543
+export DATA_DIR="$HOME/.youtubegir"
+./youtubegir-v1.0.0-darwin-arm64
+```
+
+On Windows, set `ADMIN_KEY` and `ADDR`, then run the `.exe`. Unzip the extension, open `chrome://extensions`, turn on Developer mode, and choose **Load unpacked** on the unzipped folder.
+
+macOS may block the binary the first time because it is not notarized. Allow it under Privacy and Security. Windows SmartScreen can show the same kind of prompt.
+
 ## Run with Docker
 
 Docker Desktop on a Mac with Apple silicon builds a native `linux/arm64` image. Do not force `linux/amd64`.

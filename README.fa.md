@@ -34,6 +34,35 @@ flowchart LR
 
 **فاز ۴ — ادامه و اجرا.** پوشهٔ موقت جدا، قطع امن فرایند تا فایل‌های `.part` بمانند، برگرداندن کار نیمه‌کاره بعد از ری‌استارت، volumeهای داکر، سلامت سرویس، و به‌روزرسانی yt-dlp.
 
+## دانلود
+
+تگ `v*` یک Release در گیت‌هاب می‌سازد که باینری سرور و زیپ افزونه را دارد. جمع‌های SHA256 کنار همان فایل‌هاست.
+
+| فایل | دستگاه |
+| --- | --- |
+| `youtubegir-<tag>-darwin-arm64` | مک، Apple silicon |
+| `youtubegir-<tag>-darwin-amd64` | مک، اینتل |
+| `youtubegir-<tag>-linux-amd64` | لینوکس ۶۴بیتی |
+| `youtubegir-<tag>-linux-arm64` | لینوکس ARM ۶۴بیتی |
+| `youtubegir-<tag>-windows-amd64.exe` | ویندوز ۶۴بیتی |
+| `youtube-gir-extension-<tag>.zip` | افزونهٔ کروم |
+
+https://github.com/WhoisGray/youtube-gir/releases
+
+باینری سرور `yt-dlp` و `ffmpeg` و `deno` را داخل خودش ندارد. آن‌ها را جدا نصب کنید.
+
+```bash
+chmod +x youtubegir-v1.0.0-darwin-arm64
+export ADMIN_KEY="$(openssl rand -hex 32)"
+export ADDR=127.0.0.1:6543
+export DATA_DIR="$HOME/.youtubegir"
+./youtubegir-v1.0.0-darwin-arm64
+```
+
+در ویندوز `ADMIN_KEY` و `ADDR` را بگذارید و فایل `.exe` را اجرا کنید. زیپ افزونه را باز کنید، `chrome://extensions` را باز کنید، Developer mode را روشن کنید و **Load unpacked** را روی همان پوشه بزنید.
+
+مک بار اول ممکن است باینری را ببندد چون امضای نوتاری ندارد. از Privacy and Security اجازه بدهید. SmartScreen ویندوز هم می‌تواند همین هشدار را نشان دهد.
+
 ## اجرا با داکر
 
 داکر دسکتاپ روی مک با Apple Silicon (از جمله سری M) ایمیج بومی `linux/arm64` می‌سازد. `linux/amd64` را تحمیل نکنید.

@@ -2,6 +2,11 @@ name: CI
 
 on:
   push:
+    branches:
+      - "*"
+      - "**"
+    tags:
+      - "v*"
   pull_request:
 
 permissions:
@@ -12,11 +17,102 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - name: Syntax check
-        run: bash -n bin/youtube-gir install.sh tests/cli_test.sh tests/installer_test.sh
+        run: bash -n bin/youtube-gir install.sh tests/cli_test.sh tests/installer_test.sh scripts/package.sh scripts/smoke.sh
       - name: CLI tests
         run: bash tests/cli_test.sh
       - name: Installer tests
         run: bash tests/installer_test.sh
       - name: ShellCheck
-        run: shellcheck bin/youtube-gir install.sh tests/cli_test.sh tests/installer_test.sh
+        run: shellcheck bin/youtube-gir install.sh tests/cli_test.sh tests/installer_test.sh scripts/package.sh scripts/smoke.sh
+      - name: Go tests
+        run: go test ./...
+
+  package:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build binaries and extension zip
+        env:
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+        run: bash scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+          path: dist/*
+          if-no-files-found: error
+
+  smoke:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+          path: dist
+      - name: Run the Linux server
+        env:
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+        run: |
+          internal="${VERSION#v}"
+          chmod +x "dist/youtubegir-${VERSION}-linux-amd64"
+          bash scripts/smoke.sh "dist/youtubegir-${VERSION}-linux-amd64" "$internal"
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [test, package, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ github.ref_name }}
+          path: dist
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          case "$tag" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "tag must look like v1.2.3" >&2; exit 1 ;;
+          esac
+          notes=$(mktemp)
+          cat > "$notes" <<EOF
+          Server binaries for macOS (Apple silicon and Intel), Linux (amd64 and arm64), and Windows (amd64), plus the Chrome extension.
+
+          The server does not include yt-dlp, ffmpeg, or deno. Install those on the machine that runs the binary.
+
+          \`\`\`bash
+          chmod +x youtubegir-${tag}-darwin-arm64
+          export ADMIN_KEY="\$(openssl rand -hex 32)"
+          export ADDR=127.0.0.1:6543
+          export DATA_DIR="\$HOME/.youtubegir"
+          ./youtubegir-${tag}-darwin-arm64
+          \`\`\`
+
+          On Windows, set ADMIN_KEY and ADDR, then run the .exe.
+
+          Unzip youtube-gir-extension-${tag}.zip, open chrome://extensions, turn on Developer mode, and choose Load unpacked on that folder.
+
+          macOS may block the binary the first time because it is not notarized. Allow it under Privacy and Security. Windows SmartScreen can show a similar prompt.
+
+          Check SHA256SUMS against the download before you run it.
+          EOF
+          gh release create "$tag" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$tag" \
+            --notes-file "$notes"

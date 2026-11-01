@@ -10,7 +10,8 @@ import (
 	"strings"
 )
 
-const Version = "1.0.0"
+// Version is the server version. A release build replaces it with -ldflags.
+var Version = "1.0.0"
 
 // Config is the process configuration. Paths are absolute.
 type Config struct {
