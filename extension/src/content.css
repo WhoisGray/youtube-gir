@@ -1,0 +1,64 @@
+#yg-wrap {
+  all: initial;
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  margin-inline: 8px;
+  z-index: 20;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Tahoma, sans-serif;
+}
+
+#yg-wrap.yg-float {
+  position: fixed;
+  inset-inline-end: 24px;
+  bottom: 24px;
+  margin: 0;
+  z-index: 2147483000;
+}
+
+#yg-wrap button#yg-btn {
+  all: unset;
+  cursor: pointer;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #1d1d1f;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  font: 600 13px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Tahoma, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+html[dark] #yg-wrap button#yg-btn,
+html[dark="true"] #yg-wrap button#yg-btn {
+  background: rgba(44, 44, 46, 0.94);
+  color: #f5f5f7;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+}
+
+#yg-wrap button#yg-btn svg { display: block; flex: none; }
+
+#yg-wrap button#yg-btn .yg-spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: yg-spin 0.7s linear infinite;
+  flex: none;
+}
+
+#yg-wrap button#yg-btn svg[hidden],
+#yg-wrap button#yg-btn .yg-spin[hidden] { display: none; }
+
+#yg-wrap button#yg-btn.loading { cursor: progress; }
+
+@keyframes yg-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  #yg-wrap button#yg-btn .yg-spin { animation: none; }
+}

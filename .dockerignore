@@ -1,0 +1,15 @@
+.git
+.github
+graphify-out
+bin
+extension
+tests
+docs
+data
+dist
+server/data
+server/dist
+**/*.md
+**/*_test.go
+Screenshot-*.png
+.env

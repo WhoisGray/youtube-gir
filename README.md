@@ -1,415 +1,242 @@
-# 🎬 youtube-gir
+# youtube-gir
 
-یک رابط حرفه‌ای، سریع و تعاملی برای `yt-dlp` که دانلود صوت و ویدئو را با چند preset ساده می‌کند. اگر فقط لینک را بدهید، دانلود با کیفیت **عالی** شروع می‌شود؛ اگر هیچ آرگومانی ندهید، منوی تعاملی باز خواهد شد.
+A Chrome extension and a small Go server for queuing YouTube video and audio downloads. The extension adds a download button on the watch page. The server runs `yt-dlp`, keeps a queue in SQLite, and hands each finished file a private link.
 
-```bash
-youtube-gir 'https://youtu.be/px_WwBtcoTI'
+The original command-line tool is still in this repository. Its guide is [docs/cli.fa.md](docs/cli.fa.md). Persian documentation for the server and extension is in [README.fa.md](README.fa.md).
 
-# نام سازگار با نمونهٔ اولیهٔ پروژه نیز کار می‌کند:
-youtube-git 'https://youtu.be/px_WwBtcoTI'
+You are responsible for having the rights to download the media you request.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  ext[Chrome extension] --> api[Go API]
+  api --> db[(SQLite)]
+  api --> worker[Queue worker]
+  worker --> ytdlp[yt-dlp]
+  ytdlp --> tmp[Temp volume]
+  worker --> lib[Downloads volume]
 ```
 
-> نام اصلی برنامه و ریپو `youtube-gir` است. نصب‌کننده برای سازگاری، فرمان `youtube-git` را نیز به‌صورت alias می‌سازد.
+The extension never downloads the video itself. It talks to the server you run, locally or on another machine. Each person has an API key. A person only sees their own queue. The admin key sees every user and every download.
 
-![نمای کلی نصب، منوی تعاملی و روند دانلود youtube-gir](Screenshot-1.png)
+Finished bytes are copied onto the downloads volume. Partial `yt-dlp` files stay on the temp volume, so a pause, a crash, or a dropped network can continue from the same place.
 
-<p align="center"><sub>نصب یک‌خطی، بررسی وابستگی‌ها، انتخاب نوع و کیفیت خروجی، خواندن Cookie و اجرای SponsorBlock. در نسخهٔ فعلی سؤال SponsorBlock نمایش داده نمی‌شود و این قابلیت پیش‌فرض فعال است.</sub></p>
+## Phases
 
-## ✨ امکانات
+All four phases below are in this tree.
 
-- چهار کیفیت `excellent`، `normal`، `good` و `low` برای صوت و ویدئو
-- خروجی صوتی M4A/AAC و خروجی ویدئویی MP4 با Fast Start
-- اجرای سریع فقط با `youtube-gir LINK` و منوی تعاملی با `youtube-gir`
-- تنظیم مستقل پوشهٔ پیش‌فرض صوت و ویدئو، یا `--output` برای هر اجرا
-- استخراج کوکی از Chrome (قابل تغییر به Firefox و مرورگرهای پشتیبانی‌شده)
-- حذف خودکار بخش‌های `sponsor` و `selfpromo` با SponsorBlock
-- فایل archive برای ردکردن ویدئوهایی که قبلاً دانلود شده‌اند
-- کش متمرکز، پاک‌سازی خودکار فایل‌های موقت، retry و نمایش درصد، سرعت، ETA و خطای کامل
-- metadata، chapter و thumbnail قابل جاسازی
-- بررسی نسخهٔ برنامه و yt-dlp مستقیماً از GitHub
-- آپدیت هستهٔ رسمی yt-dlp و self-update برنامه
-- کانفیگ امن `key=value` که به‌عنوان کد shell اجرا نمی‌شود
-- سازگار با macOS، Linux و Windows (Git Bash / WSL) روی Bash 3.2+
-- تشخیص خودکار سیستمعامل و انتخاب باینری و مسیر نصب مناسب برای macOS / Linux / Windows
+**Phase 1 — Core download and queue.** REST API, video and audio jobs, format and file-size lookup, SQLite queue, and a worker with a configurable concurrency limit.
 
-## 📦 نصب
+**Phase 2 — Extension UI.** Manifest V3 button on YouTube watch and Shorts pages, quality picker, popup dashboard with live progress, Apple-style light and dark UI. Strings are English and Persian.
 
-### نصب یک‌خطی مستقیم از GitHub
+**Phase 3 — Admin and keys.** The admin key creates a user key from a username. Users are isolated. Admins can list everyone. Each download gets a file token and a direct download URL.
+
+**Phase 4 — Resume and operations.** Dedicated temp directory, interrupt handling that keeps `.part` files, requeue after a restart, Docker volumes, health checks, and a yt-dlp update endpoint.
+
+## Run with Docker
+
+Docker Desktop on a Mac with Apple silicon builds a native `linux/arm64` image. Do not force `linux/amd64`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/WhoisGray/youtube-gir/main/install.sh | bash -s -- --yes
+cp .env.example .env
+# put a long random value in ADMIN_KEY
+openssl rand -hex 32
+
+docker compose up -d --build
+docker compose ps
+curl -s http://127.0.0.1:6543/health
 ```
 
-این فرمان حتی بدون clone کردن ریپو کار می‌کند. نصب‌کننده آخرین GitHub Release را پیدا می‌کند و اگر هنوز Release منتشر نشده باشد، نسخهٔ شاخهٔ `main` را می‌گیرد.
-
-> خود `youtube-gir` در `~/.local/bin` نصب می‌شود و به `sudo` نیاز ندارد. فقط نصب اولیهٔ Homebrew ممکن است برای ساخت مسیرهای سیستمی، از طریق نصب‌کنندهٔ رسمی خودش رمز مدیر بخواهد. کل فرمان بالا را با `sudo` اجرا نکنید؛ در غیر این صورت فایل‌ها ممکن است وارد Home کاربر root شوند.
-
-اگر Homebrew هنوز نصب نیست و سیستم برای آن دسترسی مدیر می‌خواهد، می‌توانید فقط مجوز sudo را پیشاپیش تأیید کنید و سپس نصب را با کاربر عادی ادامه دهید:
+Compose stores the database, finished files, and partial files in three named volumes: `youtubegir-db`, `youtubegir-downloads`, and `youtubegir-tmp`. The container restarts unless you stop it, so it keeps running in the background.
 
 ```bash
-sudo -v && curl -fsSL https://raw.githubusercontent.com/WhoisGray/youtube-gir/main/install.sh | bash -s -- --yes
+docker compose logs -f
+docker compose stop
+docker compose start
 ```
 
-### نصب با clone
+The published port is `PORT` in `.env` (default `6543`).
+
+## Run natively
+
+On a Mac:
 
 ```bash
-git clone https://github.com/WhoisGray/youtube-gir.git
-cd youtube-gir
-bash install.sh
+brew install go ffmpeg yt-dlp deno
+export ADMIN_KEY="$(openssl rand -hex 32)"
+export ADDR=127.0.0.1:6543
+go run ./cmd/youtubegir
 ```
 
-نصب‌کننده موارد زیر را بررسی یا نصب می‌کند:
+`deno` (or Node) lets current yt-dlp solve YouTube’s player script. The server picks `deno` automatically when it is on `PATH`. Set `JS_RUNTIME=none` to turn that off.
 
-1. Homebrew با نصب‌کنندهٔ رسمی `brew.sh` (فقط macOS/Linux؛ روی Windows به‌جای آن پیش‌نیازها با winget نصب می‌شوند)
-2. Node.js و FFmpeg (روی macOS/Linux از Homebrew، روی Windows از winget)
-3. Deno (روی macOS/Linux از `deno.land`، روی Windows از winget)
-4. باینری release رسمی yt-dlp از `yt-dlp/yt-dlp` با بررسی SHA-256؛ نام فایل بر اساس سیستمعامل انتخاب می‌شود: `yt-dlp_macos`، `yt-dlp_linux` یا `yt-dlp.exe`
-5. دو فرمان `youtube-gir` و `youtube-git` در `~/.local/bin`
-
-نصب‌کننده در ابتدای کار سیستمعامل را با `uname` تشخیص می‌دهد و مسیرها و باینری‌های متناسب با آن را انتخاب می‌کند؛ برای شبیه‌سازی می‌توان آن را با متغیر `YOUTUBE_GIR_OS` (مقادیر `macos`، `linux`، `windows`) override کرد.
-
-در اجرای مجدد، نصب‌کننده این بررسی‌ها را انجام می‌دهد:
-
-- اجرای `brew update` و ارتقای Node.js و FFmpeg فقط در صورت وجود نسخهٔ جدید
-- بررسی و ارتقای Deno با updater مربوط به روش نصب آن
-- مقایسهٔ نسخهٔ محلی yt-dlp با آخرین GitHub Release؛ دانلود مجدد فقط در صورت نیاز
-- مقایسهٔ نسخهٔ محلی youtube-gir با نسخهٔ GitHub؛ نصب فقط وقتی نسخه تغییر کرده باشد
-- بازسازی alias `youtube-git` در صورت حذف‌شدن آن
-
-برای نصب بدون سؤال در حالت clone:
+Build a binary and leave it running:
 
 ```bash
-bash install.sh --yes
+make build
+export ADMIN_KEY="$(openssl rand -hex 32)"
+export ADDR=127.0.0.1:6543
+export DATA_DIR="$HOME/.youtubegir"
+nohup dist/youtubegir >> "$HOME/Library/Logs/youtubegir.log" 2>&1 &
 ```
 
-اگر پیش‌نیازها را قبلاً نصب کرده‌اید:
+Data lands in `DATA_DIR` (`./data` in the repository when you do not set the variable).
+
+## Install the extension
+
+1. Open `chrome://extensions`.
+2. Turn on Developer mode.
+3. Choose **Load unpacked** and select the `extension` folder in this repository.
+4. Open the extension’s options (right-click the icon, or the gear in the popup).
+5. Server URL: `http://127.0.0.1:6543` for a server on this Mac. For any other host, Chrome asks for permission when you save or test.
+6. Paste an API key. Keys are stored with `chrome.storage.local` and are not synced to a Google account.
+
+On a YouTube watch page or Short, a **Download** pill appears in the action row (or at the corner if YouTube’s layout has no row). It loads qualities and sizes, then queues a video or a high-quality M4A audio file. The popup shows progress, total completed size, and actions to pause, resume, cancel, save, or delete. A finished title opens the original video. The popup polls the server about once a second while it is open.
+
+<img src="docs/images/admin.png" alt="Admin tab: add a person and set the download proxy" width="480">
+
+<img src="docs/images/user.png" alt="Download popup with a finished video" width="320">
+
+<img src="docs/images/extension.png" alt="Watch page button with Best video, Audio, and Car" width="340">
+
+If the browser language is Persian, the extension UI is Persian. Otherwise it is English. The rules live in `extension/src/i18n.js`.
+
+## Generate a user key
+
+The admin key is `ADMIN_KEY`. It is also the admin API key.
 
 ```bash
-bash install.sh --no-deps
+curl -s -X POST http://127.0.0.1:6543/api/v1/users \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice"}'
 ```
 
-برای نصب مجدد اجباری، حتی اگر شماره نسخه یکسان باشد:
+```json
+{
+  "id": 2,
+  "username": "alice",
+  "role": "user",
+  "token": "…64-byte hex…",
+  "created_at": "2026-11-01T12:00:00Z"
+}
+```
+
+Give `token` to that person. The server stores it, but later user-list calls do not repeat it. Usernames are 2–32 characters: letters, numbers, `_`, and `-`. `admin` is reserved.
+
+An admin can do the same from the extension settings. Open the gear, choose **Admin**, type a username, and press **Generate key**. The new key is shown once and copied to the clipboard.
+
+## API
+
+Send the key as `Authorization: Bearer <key>` or `X-API-Key`. Responses are JSON. Errors look like `{"error":"…","code":"…"}`.
+
+| Method | Path | Who | Purpose |
+| --- | --- | --- | --- |
+| GET | `/health` | anyone | Process, yt-dlp, and ffmpeg status |
+| GET | `/api/v1/me` | user | Name, role, personal stats |
+| GET | `/api/v1/stats?scope=all` | user; `scope=all` is admin | Counts and completed bytes |
+| POST | `/api/v1/formats` | user | Qualities and file sizes. Body: `{"url":"…"}` |
+| POST | `/api/v1/downloads` | user | Queue a job. See below |
+| GET | `/api/v1/downloads?limit=100&scope=all` | user; `scope=all` is admin | Queue plus stats |
+| GET | `/api/v1/downloads/{id}` | owner or admin | One job |
+| POST | `/api/v1/downloads/{id}/pause` | owner or admin | Pause. Keeps temp files |
+| POST | `/api/v1/downloads/{id}/resume` | owner or admin | Queue a paused or failed job again |
+| POST | `/api/v1/downloads/{id}/cancel` | owner or admin | Cancel and delete temp files |
+| DELETE | `/api/v1/downloads/{id}` | owner or admin | Delete the job and its file |
+| GET | `/api/v1/files/{file_token}` | anyone with the token | Download the finished file |
+| POST | `/api/v1/users` | admin | Create a user. Body: `{"username":"alice"}` |
+| GET | `/api/v1/users` | admin | Users and download counts. No tokens |
+| DELETE | `/api/v1/users/{id}` | admin | Delete a user, their rows, and their files |
+| GET | `/api/v1/system/ytdlp` | admin | yt-dlp version |
+| POST | `/api/v1/system/ytdlp/update` | admin | Run `yt-dlp -U` |
+| GET | `/api/v1/system/proxy` | admin | Proxy used for video fetches and downloads |
+| PUT | `/api/v1/system/proxy` | admin | Set or clear that proxy. Body: `{"proxy":"socks5://127.0.0.1:1080"}` |
+
+Queue a download:
 
 ```bash
-bash install.sh --force
+curl -s -X POST http://127.0.0.1:6543/api/v1/downloads \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://www.youtube.com/watch?v=VIDEO_ID","kind":"video","quality":"1080"}'
 ```
 
-اگر `~/.local/bin` در `PATH` نیست، خطی را که نصب‌کننده نمایش می‌دهد به `~/.zshrc` یا `~/.bashrc` اضافه کنید. مسیر نصب را نیز می‌توان عوض کرد:
+`kind` is `video` or `audio`. `quality` for video is `best`, `car` (H.264 up to 1080p, AAC 192 kbps, 44.1 kHz, MP4), a standard height (`144`, `240`, `360`, `480`, `720`, `1080`, `1440`, `2160`, `4320`), or a yt-dlp format id such as `137+140`. Audio always takes the best audio and writes M4A. Playlist parameters are ignored. The same active URL, kind, and quality returns the existing job with `"duplicate": true`.
 
-```bash
-YOUTUBE_GIR_BIN_DIR="$HOME/bin" bash install.sh --no-deps
-```
-
-### نصب روی Windows
-
-برنامه و نصب‌کننده روی Windows با **Git Bash** کار می‌کنند (روی WSL همه‌چیز مانند Linux است). مراحل:
-
-1. **Git for Windows** را نصب کنید که شامل Git Bash می‌شود.
-2. پیش‌نیازها را با winget نصب کنید، یا بگذارید نصب‌کنندهٔ یک‌خطی خودش آن‌ها را بررسی و نصب کند:
-
-   ```bash
-   winget install --id OpenJS.NodeJS.LTS
-   winget install --id Gyan.FFmpeg
-   winget install --id DenoLand.Deno
-   ```
-
-3. همان فرمان نصب یک‌خطی را داخل Git Bash اجرا کنید:
-
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/WhoisGray/youtube-gir/main/install.sh | bash -s -- --yes
-   ```
-
-نصب‌کننده روی Windows از Homebrew استفاده نمی‌کند. در این حالت پیش‌نیازها را با winget نصب می‌کند، باینری رسمی `yt-dlp.exe` را همراه کنترل SHA-256 در `~/.local/bin` قرار می‌دهد و برای سازگاری، فرمان `youtube-git` را به‌صورت یک فایل اجرایی کوچک (به‌جای symlink) می‌سازد. پس از نصب، پنجرهٔ Git Bash را دوباره باز کنید تا ابزارهای تازه‌نصب‌شده از طریق PATH در دسترس باشند.
-
-## 🧰 نصب دستی پیش‌نیازها
-
-نصب‌کنندهٔ یک‌خطی همهٔ این موارد را خودش بررسی می‌کند. اگر ترجیح می‌دهید آن‌ها را دستی نصب کنید، مراحل زیر را انجام دهید.
-
-### 1. Homebrew
-
-روی macOS ابتدا Command Line Tools لازم است:
-
-```bash
-xcode-select --install
-```
-
-سپس Homebrew را با دستور رسمی نصب کنید:
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-همین نصب‌کننده روی توزیع‌های پشتیبانی‌شدهٔ Linux نیز کار می‌کند. در Linux ممکن است ابتدا ابزارهایی مانند `build-essential` و `curl` را با package manager سیستم نصب کنید.
-
-### 2. Node.js و FFmpeg
-
-```bash
-brew install node ffmpeg
-```
-
-### 3. Deno
-
-```bash
-curl -fsSL https://deno.land/install.sh | sh
-export PATH="$HOME/.deno/bin:$PATH"
-```
-
-### 4. yt-dlp رسمی
-
-macOS:
-
-```bash
-mkdir -p "$HOME/.local/bin"
-curl -fL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos -o "$HOME/.local/bin/yt-dlp"
-chmod 0755 "$HOME/.local/bin/yt-dlp"
-```
-
-Linux روی x86_64:
-
-```bash
-mkdir -p "$HOME/.local/bin"
-curl -fL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o "$HOME/.local/bin/yt-dlp"
-chmod 0755 "$HOME/.local/bin/yt-dlp"
-```
-
-برای Linux ARM64 نام فایل `yt-dlp_linux_aarch64` است. Windows فقط یک فایل `yt-dlp.exe` دارد:
-
-```bash
-mkdir -p "$HOME/.local/bin"
-curl -fL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe -o "$HOME/.local/bin/yt-dlp.exe"
-chmod 0755 "$HOME/.local/bin/yt-dlp.exe"
-```
-
-نصب‌کنندهٔ خود پروژه سیستمعامل و معماری را خودکار تشخیص می‌دهد، برای Windows باینری `yt-dlp.exe` را برمی‌گزیند و checksum رسمی `SHA2-256SUMS` را نیز کنترل می‌کند؛ بنابراین روش پیشنهادی همان نصب یک‌خطی است.
-
-### 5. بررسی سیستم
-
-```bash
-export PATH="$HOME/.local/bin:$HOME/.deno/bin:$PATH"
-youtube-gir doctor
-node --version
-deno --version
-yt-dlp --version
-ffmpeg -version
-```
-
-## 🚀 استفاده
-
-دانلود پیش‌فرض (ویدئو + صدا، 1080p):
-
-```bash
-youtube-gir LINK
-```
-
-حالت تعاملی:
-
-```bash
-youtube-gir
-```
-
-صدا با کیفیت مشخص:
-
-```bash
-youtube-gir --audio --quality good LINK
-```
-
-ویدئو با حذف sponsor و خروجی سفارشی:
-
-```bash
-youtube-gir --video --quality excellent \
-  --sponsorblock \
-  --output "$HOME/Videos" \
-  LINK
-```
-
-playlist با ردکردن موارد دانلودشده:
-
-```bash
-youtube-gir --playlist --archive PLAYLIST_LINK
-```
-
-حالت سریع، پردازش thumbnail/chapter را حذف و fragmentها را هم‌زمان دریافت می‌کند:
-
-```bash
-youtube-gir --fast LINK
-```
-
-برای دیدن فرمان نهایی بدون دانلود:
-
-```bash
-youtube-gir --dry-run --no-cookies LINK
-```
-
-راهنمای کامل:
-
-```bash
-youtube-gir --help
-```
-
-## 🎚️ جدول presetها
-
-| نام | ویدئو | صوت AAC |
-|---|---:|---:|
-| `excellent` / عالی | تا 1080p | 192 kbps |
-| `normal` / معمولی | تا 720p | 160 kbps |
-| `good` / خوب | تا 480p | 128 kbps |
-| `low` / پایین | تا 360p | 96 kbps |
-
-انتخاب format چند fallback دارد؛ اگر H.264/AAC در کیفیت خواسته‌شده وجود نداشته باشد، yt-dlp بهترین فرمت سازگار بعدی را انتخاب می‌کند و FFmpeg خروجی نهایی را آماده می‌سازد.
-
-## ⚙️ تنظیمات
-
-ویرایش تعاملی تنظیمات:
-
-```bash
-youtube-gir config
-```
-
-مسیر پیش‌فرض کانفیگ:
+The `202` body includes `download.file_token`. That token is the file’s private key:
 
 ```text
-~/.config/youtube-gir/config
+http://127.0.0.1:6543/api/v1/files/<file_token>
 ```
 
-نمونهٔ کامل در [`config.example`](config.example) قرار دارد:
+The file route does not use the API key, because browser downloads cannot set one. Treat the URL like a password.
 
-```ini
-default_media=video
-default_quality=excellent
-audio_dir=
-video_dir=
-cookies_browser=chrome
-use_cookies=true
-sponsorblock=true
-use_archive=false
-archive_file=~/.local/share/youtube-gir/archive.txt
-youtube_player_client=mweb
-embed_thumbnail=true
-embed_metadata=true
-```
+Only `youtube.com`, `youtu.be`, `music.youtube.com`, and `youtube-nocookie.com` video URLs are accepted.
 
-اگر `audio_dir` یا `video_dir` خالی باشد، خروجی در همان پوشه‌ای ذخیره می‌شود که دستور را اجرا کرده‌اید. اولویت انتخاب مسیر چنین است:
+## Resume
 
-```text
---output  ←  مسیر نوع رسانه در کانفیگ  ←  پوشهٔ جاری
-```
+Each job gets a directory under the temp volume. yt-dlp is started with `--continue` and that same directory on every attempt. Pause and shutdown send `SIGINT` to the process group (so ffmpeg stops too) and leave `.part` files in place. A hard kill of the server is repaired on the next start: rows stuck in `downloading` go back to `queued`, and yt-dlp continues those partial files. `docker stop` is a clean shutdown. Avoid `kill -9` while a merge is in progress.
 
-مسیرهای استاندارد دیگر:
+The temp volume and the downloads volume are separate, so the server copies the finished file instead of renaming across mounts.
 
-- کش: `~/.cache/youtube-gir/yt-dlp`
-- فایل‌های موقت هر اجرا: `~/.cache/youtube-gir/runs/run.XXXXXX`
-- داده و آرشیو: `~/.local/share/youtube-gir/archive.txt`
-- متغیرهای `XDG_CONFIG_HOME`، `XDG_CACHE_HOME` و `XDG_DATA_HOME` پشتیبانی می‌شوند.
+## Configuration
 
-تمام فایل‌های میانی مانند `.part`، streamهای صوت/تصویر و thumbnail تبدیل‌شده ابتدا داخل پوشهٔ موقت همان اجرا نوشته می‌شوند. فقط فایل نهایی پس از تکمیل دانلود به پوشهٔ خروجی منتقل می‌شود. پوشهٔ موقت در پایان موفق، هنگام خطا و پس از `Ctrl+C` به‌صورت خودکار حذف می‌شود؛ بنابراین فایل‌های ناقص کنار خروجی پخش نخواهند شد.
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ADMIN_KEY` | required | Admin API key. Use at least 32 random characters |
+| `ADDR` | `:6543` | Listen address. `127.0.0.1:6543` keeps it on this machine |
+| `DATA_DIR` | `data` | Root for the database, downloads, and temp files |
+| `DB_PATH` | `$DATA_DIR/db/youtubegir.sqlite` | SQLite file |
+| `DOWNLOAD_DIR` | `$DATA_DIR/downloads` | Finished files |
+| `TEMP_DIR` | `$DATA_DIR/tmp` | Partial files used for resume |
+| `MAX_CONCURRENT` | `2` | Parallel yt-dlp processes, capped at 32 |
+| `YTDLP_PATH` | `yt-dlp` | Binary |
+| `FFMPEG_PATH` | discovered on `PATH` | Used for merging and audio extract |
+| `JS_RUNTIME` | `deno` or `node` if found | Passed to yt-dlp. `none` disables it |
+| `COOKIES_FILE` | empty | Optional Netscape cookies for videos your account can open |
+| `DOWNLOAD_PROXY` | empty | First-run SOCKS or HTTP proxy, for example `socks5://127.0.0.1:1080`. After a proxy is saved, the admin setting wins |
 
-## 🔐 Cookieهای Chrome و macOS Keychain
+Age-restricted or member videos need a cookies file exported from a browser where you are signed in. Mount it read-only and set `COOKIES_FILE`. Do not commit that file.
 
-Chrome مرورگر پیش‌فرض برنامه برای خواندن Cookie است:
-
-```ini
-cookies_browser=chrome
-use_cookies=true
-```
-
-Cookieهای مرورگر به yt-dlp کمک می‌کنند درخواست را با نشست واردشدهٔ شما انجام دهد و در بعضی شرایط از درخواست مجدد ورود یا CAPTCHA جلوگیری کند. این روش می‌تواند احتمال محدودشدن درخواست خودکار را کاهش دهد، اما عبور از تشخیص bot را تضمین نمی‌کند.
-
-در اولین اجرا روی macOS ممکن است پنجرهٔ دسترسی به `Chrome Safe Storage` نمایش داده شود:
-
-![پنجره دسترسی macOS Keychain برای Chrome Safe Storage](Screenshot-keychain.png)
-
-روی Linux و Windows همان Cookie‌ها با مکانیزم رمزگشایی مربوط به همان سیستمعامل (مثلاً keyring در Linux) خوانده می‌شوند و معمولاً پنجرهٔ جداگانه‌ای مانند Keychain نمایش داده نمی‌شود.
-
-اگر خودتان فرمان `youtube-gir` را اجرا کرده‌اید و پنجره مطابق تصویر بالا است، رمز ورود macOS را وارد کنید و **Always Allow** را بزنید. با این انتخاب، ابزار `security` در اجراهای بعدی بدون نمایش دوبارهٔ این پنجره، کلید لازم برای رمزگشایی Cookieهای Chrome را دریافت می‌کند.
-
-نکات امنیتی:
-
-- فقط برای درخواستی که خودتان آغاز کرده‌اید **Always Allow** را انتخاب کنید.
-- اگر دسترسی دائمی نمی‌خواهید، **Allow** را انتخاب کنید؛ احتمالاً در اجراهای بعدی دوباره سؤال می‌شود.
-- انتخاب **Deny** معمولاً باعث شکست استخراج Cookie از Chrome می‌شود.
-- Cookieها اطلاعات حساس ورود هستند؛ آن‌ها را export، commit یا برای دیگران ارسال نکنید.
-- برای اجرای بدون Cookie از `youtube-gir --no-cookies LINK` استفاده کنید.
-
-این رفتار مطابق روش رسمی `--cookies-from-browser chrome` در [راهنمای yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/FAQ) و گزینه‌های دسترسی [macOS Keychain](https://support.apple.com/guide/keychain-access/if-youre-asked-for-access-to-your-keychain-kyca1243/mac) است.
-
-## 🛡️ SponsorBlock و archive
-
-SponsorBlock به‌صورت پیش‌فرض فعال است. archive را می‌توان برای یک اجرا فعال کرد:
+An admin can set a download proxy from the extension settings, on the Admin tab, or with:
 
 ```bash
-youtube-gir --archive LINK
-youtube-gir --archive-file "$HOME/.downloads.archive" LINK
+curl -s -X PUT http://127.0.0.1:6543/api/v1/system/proxy \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"proxy":"socks5://127.0.0.1:1080"}'
 ```
 
-SponsorBlock در نصب تازه به‌صورت پیش‌فرض فعال است و در حالت تعاملی دربارهٔ آن سؤال نمی‌شود. برنامه مستقیماً بخش‌های `sponsor` و `selfpromo` را حذف می‌کند. برای غیرفعال‌کردن موقت از `--no-sponsorblock` و برای غیرفعال‌کردن دائمی از `sponsorblock=false` در کانفیگ استفاده کنید.
+yt-dlp receives `--proxy` only while it reads formats or downloads a video. The API, file downloads, version check, and `yt-dlp -U` stay direct. Send `{"proxy":""}` to clear it. A URL that contains a password is visible in the process list on the server. `DOWNLOAD_PROXY` is copied into the database only when no proxy has been saved yet.
 
-برای فعال‌بودن دائمی archive، مقدار `use_archive=true` را در کانفیگ قرار دهید.
-
-`--archive` فقط شناسهٔ دانلود موفق را ثبت می‌کند و جلوی دانلود دوباره را می‌گیرد؛ فایل رسانه را حذف نمی‌کند.
-
-## 🔄 بررسی و آپدیت
+Update yt-dlp from the admin key:
 
 ```bash
-# مقایسهٔ نسخهٔ نصب‌شده با آخرین GitHub Release برنامه و yt-dlp
-youtube-gir check-update
-
-# فقط هستهٔ رسمی yt-dlp
-youtube-gir update-core
-
-# برنامه و سپس هستهٔ yt-dlp
-youtube-gir update
+curl -s -X POST http://127.0.0.1:6543/api/v1/system/ytdlp/update \
+  -H "Authorization: Bearer $ADMIN_KEY"
 ```
 
-Self-update برنامه از آخرین Release ریپوی [`WhoisGray/youtube-gir`](https://github.com/WhoisGray/youtube-gir) انجام می‌شود. تا پیش از انتشار اولین Release، `update` بخش برنامه را رد می‌کند و همچنان آپدیت هستهٔ yt-dlp را ادامه می‌دهد؛ `update-core` نیز مستقل کار می‌کند.
+In Docker the binary lives in `/usr/local/bin`, so `-U` can replace it until the container is recreated. Rebuild the image when you want a pinned toolchain again.
 
-## 🩺 رفع اشکال
+## Security
 
-ابتدا این فرمان را اجرا کنید:
+- The admin key can see and delete every download. Keep it out of the extension unless that browser is the admin’s.
+- File tokens are unguessable and are enough to download a finished file. Do not paste them into a public chat.
+- A server on `:6543` is reachable from other machines on the network. For a laptop, set `ADDR=127.0.0.1:6543`. For a remote server, put HTTPS in front of it (Caddy or nginx) and do not publish the raw port to the internet.
+- The Docker image runs as root so the named volumes stay writable. Do not expose it beyond the people who should have keys.
+
+## Development
 
 ```bash
-youtube-gir doctor
+make test
+make build
 ```
 
-چند نکتهٔ رایج:
+Tests cover URL checks, the progress parser, the queue (pause keeps the partial file, cancel removes it), user isolation, and the file token download. They do not call YouTube.
 
-- خروجی `doctor` سیستمعامل شناسایی‌شده را هم نمایش می‌دهد. اگر تشخیص درست نبود، متغیر `YOUTUBE_GIR_OS` را با مقدار `macos`، `linux` یا `windows` به‌صورت دستی تنظیم کنید.
-- برای خطای cookie، Chrome را کامل ببندید یا از `--cookies firefox` / `--no-cookies` استفاده کنید.
-- اگر YouTube ساختار player را تغییر داد، ابتدا `youtube-gir update-core` را اجرا کنید.
-- برنامه stderr و stdout مربوط به yt-dlp/FFmpeg را پنهان نمی‌کند؛ خطای کامل بالای پیام نهایی باقی می‌ماند. برای گزارش تشخیصی گسترده‌تر از `--verbose` استفاده کنید.
-- `--no-playlist` پیش‌فرض است تا یک لینک ناخواسته کل playlist را دانلود نکند.
-- برای نمایش جزئیات داخلی yt-dlp مستقیماً `youtube-gir --verbose LINK` را اجرا کنید.
+The visual system for the extension is written down in [design.md](design.md).
 
-## 🧪 توسعه
+## Command-line tool
 
-```bash
-bash -n bin/youtube-gir install.sh tests/cli_test.sh tests/installer_test.sh
-bash tests/cli_test.sh
-bash tests/installer_test.sh
-shellcheck bin/youtube-gir install.sh tests/cli_test.sh tests/installer_test.sh
-```
-
-GitHub Actions همین سه بررسی را روی push و pull request اجرا می‌کند. برای انتشار نسخه، شمارهٔ `APP_VERSION` در `bin/youtube-gir` را تغییر دهید و tag هم‌نام مانند `v1.0.0` بسازید.
-
-## منابع رسمی
-
-- [Homebrew Installation](https://docs.brew.sh/Installation)
-- [Deno Installation](https://docs.deno.com/runtime/getting_started/installation/)
-- [Node.js Downloads](https://nodejs.org/en/download)
-- [yt-dlp Releases](https://github.com/yt-dlp/yt-dlp/releases/latest)
-- [FFmpeg](https://ffmpeg.org/)
-
-## ⚖️ مسئولیت استفاده
-
-فقط محتوایی را دانلود کنید که اجازهٔ دانلود و استفاده از آن را دارید. قوانین سرویس، حق نشر و قوانین محل زندگی شما همچنان برقرارند. این پروژه وابسته یا مورد تأیید YouTube نیست.
-
-## مجوز
-
-[MIT](LICENSE)
-
----
-
-## ⬇️ نصب مستقیم نهایی
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/WhoisGray/youtube-gir/main/install.sh | bash -s -- --yes
-```
+`install.sh`, `bin/youtube-gir`, and `make`’s server binary are different programs. The shell tool installs as `youtube-gir` / `youtube-git` and is documented in [docs/cli.fa.md](docs/cli.fa.md). `make build` writes the API server to `dist/youtubegir`.

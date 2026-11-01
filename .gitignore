@@ -4,3 +4,8 @@ graphify-out/
 *.ytdl
 *.temp.*
 archive.txt
+.env
+data/
+dist/
+server/data/
+server/dist/

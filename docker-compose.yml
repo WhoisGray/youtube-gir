@@ -1,0 +1,37 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: youtubegir:local
+    ports:
+      - "${PORT:-6543}:6543"
+    environment:
+      ADDR: ":6543"
+      ADMIN_KEY: ${ADMIN_KEY:?Set ADMIN_KEY in a .env file}
+      MAX_CONCURRENT: ${MAX_CONCURRENT:-2}
+      DATA_DIR: /data
+      DB_PATH: /data/db/youtubegir.sqlite
+      DOWNLOAD_DIR: /data/downloads
+      TEMP_DIR: /data/tmp
+      GIN_MODE: release
+      # COOKIES_FILE: /cookies.txt
+      # JS_RUNTIME: deno:/usr/local/bin/deno
+      # DOWNLOAD_PROXY: socks5://host.docker.internal:1080
+    volumes:
+      - youtubegir-db:/data/db
+      - youtubegir-downloads:/data/downloads
+      - youtubegir-tmp:/data/tmp
+      # - ./cookies.txt:/cookies.txt:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:6543/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  youtubegir-db:
+  youtubegir-downloads:
+  youtubegir-tmp:
