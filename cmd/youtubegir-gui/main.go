@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,6 +22,28 @@ func init() {
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
+	dataDir, err := gui.DataDir()
+	if err != nil {
+		slog.Error("config", "err", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		slog.Error("config", "err", err)
+		os.Exit(1)
+	}
+	gui.LogToFile(dataDir)
+
+	release, already, err := gui.ClaimRunning(dataDir)
+	if err != nil {
+		slog.Error("config", "err", err)
+		os.Exit(1)
+	}
+	if already {
+		focusExisting(dataDir)
+		return
+	}
+	defer release()
 
 	cfg, err := gui.Configure()
 	if err != nil {
@@ -77,6 +101,24 @@ func main() {
 	}
 	if err != nil {
 		slog.Error("gui", "err", err)
+		os.Exit(1)
+	}
+}
+
+func focusExisting(dataDir string) {
+	if os.Getenv("YG_GUI_NO_BROWSER") == "1" {
+		slog.Error("already running")
+		os.Exit(1)
+	}
+	port := gui.SavedPort(dataDir)
+	if port == 0 {
+		slog.Error("already running")
+		os.Exit(1)
+	}
+	url := gui.WindowURL(net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	slog.Info("already running", "url", url)
+	if _, err := gui.Launch(url); err != nil {
+		slog.Error("browser", "err", err)
 		os.Exit(1)
 	}
 }

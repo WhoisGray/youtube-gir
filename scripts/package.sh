@@ -72,6 +72,80 @@ expect_file "dist/youtubegir-gui-${version}-linux-amd64" "ELF" "x86-64"
 expect_file "dist/youtubegir-gui-${version}-linux-arm64" "ELF" "aarch64"
 expect_file "dist/youtubegir-gui-${version}-windows-amd64.exe" "PE32+" "x86-64"
 
+bundle_mac_app() (
+  set -euo pipefail
+  local goarch=$1
+  local bin="dist/youtubegir-gui-${version}-darwin-${goarch}"
+  local work
+  work=$(mktemp -d)
+  trap 'rm -rf "$work"' EXIT
+  local app="${work}/youtube-gir.app"
+  mkdir -p "${app}/Contents/MacOS" "${app}/Contents/Resources"
+  cp "$bin" "${app}/Contents/MacOS/youtube-gir"
+  chmod 755 "${app}/Contents/MacOS/youtube-gir"
+  cp packaging/macos/AppIcon.icns "${app}/Contents/Resources/AppIcon.icns"
+  cp packaging/macos/README.txt "${work}/README.txt"
+  printf 'APPL????' > "${app}/Contents/PkgInfo"
+  INTERNAL="$internal" python3 - "$app/Contents/Info.plist" packaging/macos/Info.plist <<'PY'
+import os, pathlib, sys
+src = pathlib.Path(sys.argv[2]).read_text(encoding="utf-8")
+version = os.environ["INTERNAL"]
+text = src.replace("__VERSION__", version)
+if "__VERSION__" in text:
+    raise SystemExit("version placeholder left in Info.plist")
+pathlib.Path(sys.argv[1]).write_text(text, encoding="utf-8")
+PY
+  local zip_path="dist/youtube-gir-${version}-darwin-${goarch}.app.zip"
+  python3 - "$work" "$zip_path" "$internal" <<'PY'
+import os, sys, zipfile
+from pathlib import Path
+root = Path(sys.argv[1])
+dest = Path(sys.argv[2])
+version = sys.argv[3]
+def add(zf, path):
+    rel = path.relative_to(root).as_posix()
+    if path.is_dir():
+        rel = rel.rstrip("/") + "/"
+    info = zipfile.ZipInfo(rel)
+    info.create_system = 3
+    info.external_attr = (path.stat().st_mode & 0xFFFF) << 16
+    info.compress_type = zipfile.ZIP_DEFLATED
+    if path.is_dir():
+        zf.writestr(info, b"")
+        return
+    zf.writestr(info, path.read_bytes())
+with zipfile.ZipFile(dest, "w") as zf:
+    for path in sorted(root.rglob("*")):
+        if path.is_dir() or path.is_file():
+            add(zf, path)
+need = [
+    "README.txt",
+    "youtube-gir.app/Contents/Info.plist",
+    "youtube-gir.app/Contents/MacOS/youtube-gir",
+    "youtube-gir.app/Contents/Resources/AppIcon.icns",
+    "youtube-gir.app/Contents/PkgInfo",
+]
+archive = zipfile.ZipFile(dest)
+names = set(archive.namelist())
+missing = [name for name in need if name not in names]
+if missing:
+    raise SystemExit("app zip missing " + ", ".join(missing))
+info = archive.getinfo("youtube-gir.app/Contents/MacOS/youtube-gir")
+mode = (info.external_attr >> 16) & 0o777
+if mode & 0o111 == 0:
+    raise SystemExit("app binary is not marked executable in the zip")
+plist = archive.read("youtube-gir.app/Contents/Info.plist")
+if b"<string>youtube-gir</string>" not in plist or version.encode() not in plist:
+    raise SystemExit("Info.plist is missing the executable name or version")
+if b"__VERSION__" in plist:
+    raise SystemExit("Info.plist still has a version placeholder")
+print("app zip", dest, "files", len(names), "mode", oct(mode))
+PY
+)
+
+bundle_mac_app arm64
+bundle_mac_app amd64
+
 if ! command -v node >/dev/null 2>&1; then
   echo "node is required to check the extension" >&2
   exit 1

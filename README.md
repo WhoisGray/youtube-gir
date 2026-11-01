@@ -37,17 +37,19 @@ All four phases below are in this tree.
 
 ## Downloads
 
-A `v*` tag publishes a GitHub release with the server, the desktop app, and the extension. The file list and checksums are on the release. Release v1.0.0 has the server and the extension. Desktop builds come from this tree, and the next tag includes them.
+A `v*` tag publishes a GitHub release with the server, the desktop app, and the extension. The file list and checksums are on the release.
 
 | File | Machine |
 | --- | --- |
+| `youtube-gir-<tag>-darwin-arm64.app.zip` | Mac, Apple silicon. Unzip and move `youtube-gir.app` to Applications |
+| `youtube-gir-<tag>-darwin-amd64.app.zip` | Mac, Intel. Unzip and move `youtube-gir.app` to Applications |
 | `youtubegir-<tag>-darwin-arm64` | Mac, Apple silicon, server |
 | `youtubegir-<tag>-darwin-amd64` | Mac, Intel, server |
 | `youtubegir-<tag>-linux-amd64` | Linux, 64-bit, server |
 | `youtubegir-<tag>-linux-arm64` | Linux, ARM 64-bit, server |
 | `youtubegir-<tag>-windows-amd64.exe` | Windows, 64-bit, server |
-| `youtubegir-gui-<tag>-darwin-arm64` | Mac, Apple silicon, desktop app |
-| `youtubegir-gui-<tag>-darwin-amd64` | Mac, Intel, desktop app |
+| `youtubegir-gui-<tag>-darwin-arm64` | Mac, Apple silicon, terminal build of the desktop app |
+| `youtubegir-gui-<tag>-darwin-amd64` | Mac, Intel, terminal build of the desktop app |
 | `youtubegir-gui-<tag>-linux-amd64` | Linux, 64-bit, desktop app |
 | `youtubegir-gui-<tag>-linux-arm64` | Linux, ARM 64-bit, desktop app |
 | `youtubegir-gui-<tag>-windows-amd64.exe` | Windows, 64-bit, desktop app |
@@ -58,11 +60,11 @@ https://github.com/WhoisGray/youtube-gir/releases
 The server and the desktop app do not include yt-dlp, ffmpeg, or deno. Install those beside them.
 
 ```bash
-chmod +x youtubegir-v1.0.0-darwin-arm64
+chmod +x youtubegir-<tag>-darwin-arm64
 export ADMIN_KEY="$(openssl rand -hex 32)"
 export ADDR=127.0.0.1:6543
 export DATA_DIR="$HOME/.youtubegir"
-./youtubegir-v1.0.0-darwin-arm64
+./youtubegir-<tag>-darwin-arm64
 ```
 
 On Windows, set `ADMIN_KEY` and `ADDR`, then run the `.exe`. Unzip the extension, open `chrome://extensions`, turn on Developer mode, and choose **Load unpacked** on the unzipped folder.
@@ -75,11 +77,15 @@ macOS may block the binary the first time because it is not notarized. Allow it 
 
 Settings shows the server URL and API key so the extension can use this app. It also holds the download proxy and user keys.
 
-On a Mac, data lives in `~/Library/Application Support/youtube-gir` unless `DATA_DIR` is set. On Linux it uses `$XDG_DATA_HOME/youtube-gir` or `~/.local/share/youtube-gir`. On Windows it uses `%AppData%\youtube-gir`. The app listens on `127.0.0.1:6543` when that port is free. If something else is already there, it picks the next free port and shows the URL in Settings. Close the window to stop the server.
+On a Mac, download `youtube-gir-<tag>-darwin-arm64.app.zip` (Apple silicon) or `youtube-gir-<tag>-darwin-amd64.app.zip` (Intel). Unzip it. Move `youtube-gir.app` into Applications and double-click it. The first open can fail because the app is not notarized. Control-click the app, choose Open, then choose Open again. After that, a normal double-click works.
+
+Data lives in `~/Library/Application Support/youtube-gir` unless `DATA_DIR` is set. On Linux it uses `$XDG_DATA_HOME/youtube-gir` or `~/.local/share/youtube-gir`. On Windows it uses `%AppData%\youtube-gir`. The app listens on `127.0.0.1:6543` when that port is free. If something else is already there, it picks the next free port and shows the URL in Settings. Close the window to stop the server. Clicking the icon again opens the window of the app that is already running.
+
+The `youtubegir-gui-<tag>-darwin-*` file is the same program for a terminal:
 
 ```bash
-chmod +x youtubegir-gui-v1.0.0-darwin-arm64
-./youtubegir-gui-v1.0.0-darwin-arm64
+chmod +x youtubegir-gui-<tag>-darwin-arm64
+./youtubegir-gui-<tag>-darwin-arm64
 ```
 
 `ADMIN_KEY`, `ADDR`, and `DATA_DIR` still override those defaults when you set them. `YG_GUI_NO_BROWSER=1` starts the server without a window.

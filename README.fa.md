@@ -37,17 +37,19 @@ flowchart LR
 
 ## دانلود
 
-تگ `v*` یک Release در گیت‌هاب می‌سازد که باینری سرور، برنامهٔ دسکتاپ، و زیپ افزونه را دارد. جمع‌های SHA256 کنار همان فایل‌هاست. Release نسخهٔ v1.0.0 سرور و افزونه را دارد. ساخت دسکتاپ از همین درخت است و تگ بعدی آن را هم شامل می‌شود.
+تگ `v*` یک Release در گیت‌هاب می‌سازد که باینری سرور، برنامهٔ دسکتاپ، و زیپ افزونه را دارد. جمع‌های SHA256 کنار همان فایل‌هاست.
 
 | فایل | دستگاه |
 | --- | --- |
+| `youtube-gir-<tag>-darwin-arm64.app.zip` | مک، Apple silicon. زیپ را باز کنید و `youtube-gir.app` را به Applications ببرید |
+| `youtube-gir-<tag>-darwin-amd64.app.zip` | مک، اینتل. زیپ را باز کنید و `youtube-gir.app` را به Applications ببرید |
 | `youtubegir-<tag>-darwin-arm64` | مک، Apple silicon، سرور |
 | `youtubegir-<tag>-darwin-amd64` | مک، اینتل، سرور |
 | `youtubegir-<tag>-linux-amd64` | لینوکس ۶۴بیتی، سرور |
 | `youtubegir-<tag>-linux-arm64` | لینوکس ARM ۶۴بیتی، سرور |
 | `youtubegir-<tag>-windows-amd64.exe` | ویندوز ۶۴بیتی، سرور |
-| `youtubegir-gui-<tag>-darwin-arm64` | مک، Apple silicon، دسکتاپ |
-| `youtubegir-gui-<tag>-darwin-amd64` | مک، اینتل، دسکتاپ |
+| `youtubegir-gui-<tag>-darwin-arm64` | مک، Apple silicon، ساخت ترمینال برنامهٔ دسکتاپ |
+| `youtubegir-gui-<tag>-darwin-amd64` | مک، اینتل، ساخت ترمینال برنامهٔ دسکتاپ |
 | `youtubegir-gui-<tag>-linux-amd64` | لینوکس ۶۴بیتی، دسکتاپ |
 | `youtubegir-gui-<tag>-linux-arm64` | لینوکس ARM ۶۴بیتی، دسکتاپ |
 | `youtubegir-gui-<tag>-windows-amd64.exe` | ویندوز ۶۴بیتی، دسکتاپ |
@@ -58,11 +60,11 @@ https://github.com/WhoisGray/youtube-gir/releases
 باینری سرور و برنامهٔ دسکتاپ `yt-dlp` و `ffmpeg` و `deno` را داخل خودشان ندارند. آن‌ها را جدا نصب کنید.
 
 ```bash
-chmod +x youtubegir-v1.0.0-darwin-arm64
+chmod +x youtubegir-<tag>-darwin-arm64
 export ADMIN_KEY="$(openssl rand -hex 32)"
 export ADDR=127.0.0.1:6543
 export DATA_DIR="$HOME/.youtubegir"
-./youtubegir-v1.0.0-darwin-arm64
+./youtubegir-<tag>-darwin-arm64
 ```
 
 در ویندوز `ADMIN_KEY` و `ADDR` را بگذارید و فایل `.exe` را اجرا کنید. زیپ افزونه را باز کنید، `chrome://extensions` را باز کنید، Developer mode را روشن کنید و **Load unpacked** را روی همان پوشه بزنید.
@@ -75,11 +77,15 @@ export DATA_DIR="$HOME/.youtubegir"
 
 در تنظیمات، نشانی سرور و کلید API هست تا افزونه از همین برنامه استفاده کند. پروکسی دانلود و کلید کاربرها هم آنجاست.
 
-روی مک، داده‌ها در `~/Library/Application Support/youtube-gir` می‌ماند مگر اینکه `DATA_DIR` را خودتان بگذارید. روی لینوکس `$XDG_DATA_HOME/youtube-gir` یا `~/.local/share/youtube-gir`. روی ویندوز `%AppData%\youtube-gir`. اگر پورت `127.0.0.1:6543` آزاد باشد همان را می‌گیرد. اگر چیزی آنجا باشد، پورت بعدی را برمی‌دارد و نشانی را در تنظیمات نشان می‌دهد. بستن پنجره سرور را خاموش می‌کند.
+روی مک، `youtube-gir-<tag>-darwin-arm64.app.zip` را برای Apple silicon بگیرید، یا `youtube-gir-<tag>-darwin-amd64.app.zip` را برای اینتل. زیپ را باز کنید. `youtube-gir.app` را به پوشهٔ Applications ببرید و رویش دو بار کلیک کنید. بار اول ممکن است مک بازش نکند چون امضای نوتاری ندارد. Control-click کنید، Open را بزنید، و دوباره Open را بزنید. بعد از آن کلیک معمولی کار می‌کند.
+
+داده‌ها در `~/Library/Application Support/youtube-gir` می‌ماند مگر اینکه `DATA_DIR` را خودتان بگذارید. روی لینوکس `$XDG_DATA_HOME/youtube-gir` یا `~/.local/share/youtube-gir`. روی ویندوز `%AppData%\youtube-gir`. اگر پورت `127.0.0.1:6543` آزاد باشد همان را می‌گیرد. اگر چیزی آنجا باشد، پورت بعدی را برمی‌دارد و نشانی را در تنظیمات نشان می‌دهد. بستن پنجره سرور را خاموش می‌کند. کلیک دوباره روی آیکون، پنجرهٔ همان برنامهٔ در حال اجرا را باز می‌کند.
+
+فایل `youtubegir-gui-<tag>-darwin-*` همان برنامه برای ترمینال است:
 
 ```bash
-chmod +x youtubegir-gui-v1.0.0-darwin-arm64
-./youtubegir-gui-v1.0.0-darwin-arm64
+chmod +x youtubegir-gui-<tag>-darwin-arm64
+./youtubegir-gui-<tag>-darwin-arm64
 ```
 
 `ADMIN_KEY` و `ADDR` و `DATA_DIR` این پیش‌فرض‌ها را عوض می‌کنند. `YG_GUI_NO_BROWSER=1` سرور را بدون پنجره بالا می‌آورد.

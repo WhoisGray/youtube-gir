@@ -97,14 +97,16 @@ jobs:
 
           The server and the desktop app do not include yt-dlp, ffmpeg, or deno. Install those on the machine that runs the binary.
 
-          The desktop app starts the server and opens a window. Close the window to stop the server. Settings shows the URL and API key for the extension.
+          On a Mac, download youtube-gir-${tag}-darwin-arm64.app.zip (Apple silicon) or youtube-gir-${tag}-darwin-amd64.app.zip (Intel). Unzip it, move youtube-gir.app to Applications, and double-click it. The first open can fail because the app is not notarized. Control-click the app, choose Open, then choose Open again.
+
+          The desktop app starts the server and opens a window. Close the window to stop the server. Settings shows the URL and API key for the extension. It listens on 127.0.0.1:6543 when that port is free. Data stays in the user application folder. Clicking the icon again opens the window that is already running.
+
+          The youtubegir-gui file is the same program for a terminal. YG_GUI_NO_BROWSER=1 starts the server without a window. Chrome, Edge, Chromium, or Brave opens the window.
 
           \`\`\`bash
           chmod +x youtubegir-gui-${tag}-darwin-arm64
           ./youtubegir-gui-${tag}-darwin-arm64
           \`\`\`
-
-          It listens on 127.0.0.1:6543 when that port is free. Data stays in the user application folder. YG_GUI_NO_BROWSER=1 starts the server without a window. Chrome, Edge, Chromium, or Brave opens the window.
 
           \`\`\`bash
           chmod +x youtubegir-${tag}-darwin-arm64

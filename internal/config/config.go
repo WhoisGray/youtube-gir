@@ -76,7 +76,7 @@ func resolveJSRuntime() string {
 		if p := findDeno(); p != "" {
 			return "deno:" + p
 		}
-		if p, err := exec.LookPath("node"); err == nil {
+		if p := findNode(); p != "" {
 			return "node:" + p
 		}
 		return ""
@@ -97,6 +97,17 @@ func findDeno() string {
 			filepath.Join(home, ".deno", "bin", "deno"),
 			filepath.Join(home, ".local", "bin", "deno"),
 		)
+	}
+	return firstExecutable(candidates)
+}
+
+func findNode() string {
+	if p, err := exec.LookPath("node"); err == nil {
+		return p
+	}
+	candidates := []string{"/opt/homebrew/bin/node", "/usr/local/bin/node"}
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".local", "bin", "node"))
 	}
 	return firstExecutable(candidates)
 }

@@ -16,17 +16,30 @@ import (
 	"github.com/WhoisGray/youtube-gir/internal/config"
 )
 
+// DataDir is the folder the desktop app uses for its key, database, and port.
+// DATA_DIR wins when it is set.
+func DataDir() (string, error) {
+	if dir := strings.TrimSpace(os.Getenv("DATA_DIR")); dir != "" {
+		return dir, nil
+	}
+	return userDataDir()
+}
+
+// SavedPort reads the port written by the running app. Zero means none.
+func SavedPort(dataDir string) int {
+	return readPort(filepath.Join(dataDir, "port"))
+}
+
 // Configure fills a data directory, admin key, and loopback port when the
 // environment does not already set them, then loads the server config.
 // ADMIN_KEY, DATA_DIR, and ADDR still win when they are set.
 func Configure() (config.Config, error) {
-	dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
-	if dataDir == "" {
-		dir, err := userDataDir()
-		if err != nil {
-			return config.Config{}, err
-		}
-		dataDir = dir
+	extendToolPath()
+	dataDir, err := DataDir()
+	if err != nil {
+		return config.Config{}, err
+	}
+	if strings.TrimSpace(os.Getenv("DATA_DIR")) == "" {
 		if err := os.Setenv("DATA_DIR", dataDir); err != nil {
 			return config.Config{}, err
 		}

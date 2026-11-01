@@ -6,13 +6,38 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 func TestMain(m *testing.M) {
+	if os.Getenv("YG_LOCK_HELPER") == "1" {
+		os.Exit(holdLockUntilStdin())
+	}
 	gin.SetMode(gin.TestMode)
 	os.Exit(m.Run())
+}
+
+func holdLockUntilStdin() int {
+	dir := os.Getenv("YG_LOCK_DIR")
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		release, already, err := ClaimRunning(dir)
+		if err != nil {
+			return 2
+		}
+		if !already {
+			buf := make([]byte, 1)
+			_, _ = os.Stdin.Read(buf)
+			release()
+			return 0
+		}
+		if time.Now().After(deadline) {
+			return 3
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 func TestPageKeyVisibility(t *testing.T) {
