@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the server for macOS, Linux, and Windows, and zip the extension.
+# Build the server and the desktop app for macOS, Linux, and Windows, and zip the extension.
 # VERSION is the release tag (v1.2.3) or "dev".
 set -euo pipefail
 
@@ -16,16 +16,25 @@ internal="${version#v}"
 rm -rf dist
 mkdir -p dist
 
-while read -r goos goarch; do
-  ext=""
+build_bin() {
+  local prefix=$1
+  local pkg=$2
+  local goos=$3
+  local goarch=$4
+  local ext=""
   if [[ "$goos" == "windows" ]]; then
     ext=".exe"
   fi
-  name="youtubegir-${version}-${goos}-${goarch}${ext}"
+  local name="${prefix}-${version}-${goos}-${goarch}${ext}"
   echo "build ${name}"
   CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath \
     -ldflags="-s -w -X github.com/WhoisGray/youtube-gir/internal/config.Version=${internal}" \
-    -o "dist/${name}" ./cmd/youtubegir
+    -o "dist/${name}" "$pkg"
+}
+
+while read -r goos goarch; do
+  build_bin youtubegir ./cmd/youtubegir "$goos" "$goarch"
+  build_bin youtubegir-gui ./cmd/youtubegir-gui "$goos" "$goarch"
 done <<'EOF'
 darwin amd64
 darwin arm64
@@ -57,6 +66,11 @@ expect_file "dist/youtubegir-${version}-darwin-arm64" "Mach-O" "arm64"
 expect_file "dist/youtubegir-${version}-linux-amd64" "ELF" "x86-64"
 expect_file "dist/youtubegir-${version}-linux-arm64" "ELF" "aarch64"
 expect_file "dist/youtubegir-${version}-windows-amd64.exe" "PE32+" "x86-64"
+expect_file "dist/youtubegir-gui-${version}-darwin-amd64" "Mach-O" "x86_64"
+expect_file "dist/youtubegir-gui-${version}-darwin-arm64" "Mach-O" "arm64"
+expect_file "dist/youtubegir-gui-${version}-linux-amd64" "ELF" "x86-64"
+expect_file "dist/youtubegir-gui-${version}-linux-arm64" "ELF" "aarch64"
+expect_file "dist/youtubegir-gui-${version}-windows-amd64.exe" "PE32+" "x86-64"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "node is required to check the extension" >&2
@@ -65,6 +79,7 @@ fi
 while IFS= read -r js; do
   node --check "$js"
 done < <(find extension -name '*.js' -type f | sort)
+node --check internal/gui/assets/app.js
 
 stage=$(mktemp -d)
 cleanup() { rm -rf "$stage"; }

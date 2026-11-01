@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Start one built server and check health plus the admin account.
-# Usage: scripts/smoke.sh <binary> <expected-version>
+# Usage: scripts/smoke.sh <binary> <expected-version> [server|gui]
 set -euo pipefail
 
 bin=${1:?binary path}
 expect=${2:?expected version}
+mode=${3:-server}
+case "$mode" in
+  server|gui) ;;
+  *)
+    echo "usage: scripts/smoke.sh <binary> <expected-version> [server|gui]" >&2
+    exit 1
+    ;;
+esac
 if [[ ! -x "$bin" && ! -f "$bin" ]]; then
   echo "binary not found: $bin" >&2
   exit 1
@@ -15,6 +23,9 @@ log="${dir}/server.log"
 body="${dir}/body.json"
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
 key=$(openssl rand -hex 16)
+if [[ "$mode" == "gui" ]]; then
+  export YG_GUI_NO_BROWSER=1
+fi
 
 ADMIN_KEY="$key" \
   ADDR="127.0.0.1:${port}" \
@@ -79,5 +90,43 @@ if doc.get("username") != "admin" or doc.get("role") != "admin":
     raise SystemExit("unexpected /me: username=%r role=%r" % (doc.get("username"), doc.get("role")))
 print("me", doc["username"], doc["role"])
 PY
+
+root="${dir}/root.json"
+root_code=$(curl -sS -o "$root" -w "%{http_code}" --connect-timeout 1 --max-time 2 "http://127.0.0.1:${port}/")
+if [[ "$root_code" != "200" ]]; then
+  echo "GET / returned ${root_code}" >&2
+  exit 1
+fi
+python3 - "$root" <<'PY'
+import json, sys
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+if doc.get("name") != "youtube-gir":
+    raise SystemExit("GET / name is %r" % (doc.get("name"),))
+print("root", doc.get("name"))
+PY
+
+if [[ "$mode" == "gui" ]]; then
+  page="${dir}/page.html"
+  page_code=$(curl -sS -o "$page" -w "%{http_code}" --connect-timeout 1 --max-time 2 "http://127.0.0.1:${port}/app/")
+  if [[ "$page_code" != "200" ]]; then
+    echo "GET /app/ returned ${page_code}" >&2
+    exit 1
+  fi
+  if ! grep -F -q 'id="url"' "$page"; then
+    echo "app page has no url field" >&2
+    exit 1
+  fi
+  if ! grep -F -q "$key" "$page"; then
+    echo "app page did not include the admin key" >&2
+    exit 1
+  fi
+  js_code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 1 --max-time 2 "http://127.0.0.1:${port}/app/app.js")
+  css_code=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 1 --max-time 2 "http://127.0.0.1:${port}/app/app.css")
+  if [[ "$js_code" != "200" || "$css_code" != "200" ]]; then
+    echo "app assets js=${js_code} css=${css_code}" >&2
+    exit 1
+  fi
+  echo "app page ok"
+fi
 
 echo "smoke ok ${bin}"

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>youtube-gir</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230a84ff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="app.css">
+  <script>
+    (function () {
+      var lang = (navigator.language || "en").toLowerCase();
+      var fa = lang.indexOf("fa") === 0;
+      document.documentElement.lang = fa ? "fa" : "en";
+      document.documentElement.dir = fa ? "rtl" : "ltr";
+    })();
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M11 3a1 1 0 0 1 2 0v9.17l2.3-2.3a1 1 0 0 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42L11 12.17V3zM5 18a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1z"/></svg>
+      </span>
+      <div class="titles">
+        <h1 id="title">youtube-gir</h1>
+        <p id="who" class="muted"></p>
+      </div>
+      <div class="spacer">
+        <span id="version" class="muted"></span>
+        <button type="button" id="settings">Settings</button>
+        <button type="button" id="quit">Quit</button>
+      </div>
+    </header>
+
+    <p id="tools" class="banner" role="status" hidden></p>
+    <p id="banner" class="banner" role="status" hidden></p>
+
+    <form id="add" class="card">
+      <label id="url-label" for="url">YouTube link</label>
+      <input id="url" name="url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=">
+      <div class="presets">
+        <button type="submit" class="primary" id="best" data-kind="video" data-quality="best">Best video</button>
+        <button type="submit" id="audio" data-kind="audio" data-quality="best">Audio</button>
+        <button type="submit" id="car" data-kind="video" data-quality="car">Car</button>
+      </div>
+      <p id="car-hint" class="hint">Car keeps H.264 up to 1080p and AAC audio in an MP4.</p>
+      <div id="quality-row" class="row" hidden>
+        <label id="quality-label" for="quality">Quality</label>
+        <select id="quality"></select>
+        <button type="submit" id="pick" data-kind="video" data-quality="pick">Download this quality</button>
+        <button type="button" id="refresh">Refresh qualities</button>
+      </div>
+      <p id="form-status" role="status"></p>
+    </form>
+
+    <p id="stats" class="stats"></p>
+    <div id="scope" class="seg" role="group" hidden>
+      <button type="button" id="scope-mine" class="on" aria-pressed="true">Mine</button>
+      <button type="button" id="scope-all" aria-pressed="false">Everyone</button>
+    </div>
+    <p id="empty" class="empty">Nothing in the queue. Paste a YouTube link and choose Best video, Audio, or Car.</p>
+    <ul id="list" hidden></ul>
+  </div>
+
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <div class="dialog-scroll">
+    <h2 id="settings-title">Settings</h2>
+    <label id="server-label" for="server-url">Server URL</label>
+    <div class="field-row">
+      <input id="server-url" type="text" readonly>
+      <button type="button" id="copy-server">Copy</button>
+    </div>
+    <label id="key-label" for="api-key">API key</label>
+    <div class="field-row">
+      <input id="api-key" type="password" readonly autocomplete="off">
+      <button type="button" id="reveal-key" aria-pressed="false">Show</button>
+      <button type="button" id="copy-key">Copy</button>
+    </div>
+    <p id="extension-help" class="hint">Paste this URL and key into the extension options. The extension then uses this app as its server.</p>
+
+    <div id="admin-tools">
+      <section>
+        <h3 id="proxy-title">Download proxy</h3>
+        <form id="proxy-form">
+          <label id="proxy-label" for="proxy">SOCKS or HTTP proxy</label>
+          <input id="proxy" type="text" autocomplete="off" spellcheck="false">
+          <p id="proxy-hint" class="hint">SOCKS5 or HTTP, for example socks5://127.0.0.1:1080. Used only while fetching and downloading a video. The server itself stays direct.</p>
+          <button type="submit" id="proxy-save">Save proxy</button>
+          <p id="proxy-status" role="status"></p>
+        </form>
+      </section>
+      <section>
+        <h3 id="users-title">People</h3>
+        <form id="user-form">
+          <label id="user-label" for="username">Username</label>
+          <div class="field-row">
+            <input id="username" type="text" autocomplete="off" maxlength="32">
+            <button type="submit" id="generate">Generate key</button>
+          </div>
+        </form>
+        <p id="new-key" class="keybox" hidden></p>
+        <p id="user-status" role="status"></p>
+        <ul id="users"></ul>
+      </section>
+    </div>
+
+    </div>
+    <div class="dialog-actions">
+      <button type="button" id="open-folder">Open downloads folder</button>
+      <button type="button" id="close-settings">Close</button>
+      <p id="folder-status" role="status"></p>
+    </div>
+  </dialog>
+
+  <noscript><p class="wrap">This window needs JavaScript.</p></noscript>
+  <script id="boot" type="application/json">{{.Boot}}</script>
+  <script src="app.js"></script>
+</body>
+</html>

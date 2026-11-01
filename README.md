@@ -1,8 +1,8 @@
 # youtube-gir
 
-A Chrome extension and a small Go server for queuing YouTube video and audio downloads. The extension adds a download button on the watch page. The server runs `yt-dlp`, keeps a queue in SQLite, and hands each finished file a private link.
+youtube-gir downloads YouTube video and audio with yt-dlp. There are three ways to use it: a desktop app that starts the server and opens a window, the original command-line tool, and a Chrome extension that talks to the server.
 
-The original command-line tool is still in this repository. Its guide is [docs/cli.fa.md](docs/cli.fa.md). Persian documentation for the server and extension is in [README.fa.md](README.fa.md).
+The desktop app includes the server and the downloader. You can also run that server on its own, including in Docker, and point the extension at it. The extension adds a download button on the watch page. The server keeps a queue in SQLite and hands each finished file a private link. The command-line guide is [docs/cli.fa.md](docs/cli.fa.md). Persian documentation is in [README.fa.md](README.fa.md).
 
 You are responsible for having the rights to download the media you request.
 
@@ -10,7 +10,8 @@ You are responsible for having the rights to download the media you request.
 
 ```mermaid
 flowchart LR
-  ext[Chrome extension] --> api[Go API]
+  gui[Desktop window] --> api[Go API]
+  ext[Chrome extension] --> api
   api --> db[(SQLite)]
   api --> worker[Queue worker]
   worker --> ytdlp[yt-dlp]
@@ -36,20 +37,25 @@ All four phases below are in this tree.
 
 ## Downloads
 
-A `v*` tag publishes a GitHub release with the server and the extension. The file list and checksums are on the release. Current builds:
+A `v*` tag publishes a GitHub release with the server, the desktop app, and the extension. The file list and checksums are on the release. Release v1.0.0 has the server and the extension. Desktop builds come from this tree, and the next tag includes them.
 
 | File | Machine |
 | --- | --- |
-| `youtubegir-<tag>-darwin-arm64` | Mac, Apple silicon |
-| `youtubegir-<tag>-darwin-amd64` | Mac, Intel |
-| `youtubegir-<tag>-linux-amd64` | Linux, 64-bit |
-| `youtubegir-<tag>-linux-arm64` | Linux, ARM 64-bit |
-| `youtubegir-<tag>-windows-amd64.exe` | Windows, 64-bit |
+| `youtubegir-<tag>-darwin-arm64` | Mac, Apple silicon, server |
+| `youtubegir-<tag>-darwin-amd64` | Mac, Intel, server |
+| `youtubegir-<tag>-linux-amd64` | Linux, 64-bit, server |
+| `youtubegir-<tag>-linux-arm64` | Linux, ARM 64-bit, server |
+| `youtubegir-<tag>-windows-amd64.exe` | Windows, 64-bit, server |
+| `youtubegir-gui-<tag>-darwin-arm64` | Mac, Apple silicon, desktop app |
+| `youtubegir-gui-<tag>-darwin-amd64` | Mac, Intel, desktop app |
+| `youtubegir-gui-<tag>-linux-amd64` | Linux, 64-bit, desktop app |
+| `youtubegir-gui-<tag>-linux-arm64` | Linux, ARM 64-bit, desktop app |
+| `youtubegir-gui-<tag>-windows-amd64.exe` | Windows, 64-bit, desktop app |
 | `youtube-gir-extension-<tag>.zip` | Chrome extension |
 
 https://github.com/WhoisGray/youtube-gir/releases
 
-The server binary does not include yt-dlp, ffmpeg, or deno. Install those beside it.
+The server and the desktop app do not include yt-dlp, ffmpeg, or deno. Install those beside them.
 
 ```bash
 chmod +x youtubegir-v1.0.0-darwin-arm64
@@ -62,6 +68,23 @@ export DATA_DIR="$HOME/.youtubegir"
 On Windows, set `ADMIN_KEY` and `ADDR`, then run the `.exe`. Unzip the extension, open `chrome://extensions`, turn on Developer mode, and choose **Load unpacked** on the unzipped folder.
 
 macOS may block the binary the first time because it is not notarized. Allow it under Privacy and Security. Windows SmartScreen can show the same kind of prompt.
+
+## Desktop app
+
+`youtubegir-gui` starts the server and opens a window. Paste a YouTube link, then choose Best video, Audio, or Car. The queue, pause, resume, save, and delete controls match the extension.
+
+Settings shows the server URL and API key so the extension can use this app. It also holds the download proxy and user keys.
+
+On a Mac, data lives in `~/Library/Application Support/youtube-gir` unless `DATA_DIR` is set. On Linux it uses `$XDG_DATA_HOME/youtube-gir` or `~/.local/share/youtube-gir`. On Windows it uses `%AppData%\youtube-gir`. The app listens on `127.0.0.1:6543` when that port is free. If something else is already there, it picks the next free port and shows the URL in Settings. Close the window to stop the server.
+
+```bash
+chmod +x youtubegir-gui-v1.0.0-darwin-arm64
+./youtubegir-gui-v1.0.0-darwin-arm64
+```
+
+`ADMIN_KEY`, `ADDR`, and `DATA_DIR` still override those defaults when you set them. `YG_GUI_NO_BROWSER=1` starts the server without a window.
+
+Chrome, Edge, Chromium, or Brave opens the window. If none of those is installed, the app prints the URL and keeps serving until you stop it.
 
 ## Run with Docker
 
@@ -118,7 +141,7 @@ Data lands in `DATA_DIR` (`./data` in the repository when you do not set the var
 2. Turn on Developer mode.
 3. Choose **Load unpacked** and select the `extension` folder in this repository.
 4. Open the extension’s options (right-click the icon, or the gear in the popup).
-5. Server URL: `http://127.0.0.1:6543` for a server on this Mac. For any other host, Chrome asks for permission when you save or test.
+5. Server URL: `http://127.0.0.1:6543` for a server on this Mac. If you use the desktop app, copy the URL and API key from its Settings. For any other host, Chrome asks for permission when you save or test.
 6. Paste an API key. Keys are stored with `chrome.storage.local` and are not synced to a Google account.
 
 On a YouTube watch page or Short, a **Download** pill appears in the action row (or at the corner if YouTube’s layout has no row). It loads qualities and sizes, then queues a video or a high-quality M4A audio file. The popup shows progress, total completed size, and actions to pause, resume, cancel, save, or delete. A finished title opens the original video. The popup polls the server about once a second while it is open.
@@ -260,6 +283,7 @@ In Docker the binary lives in `/usr/local/bin`, so `-U` can replace it until the
 ```bash
 make test
 make build
+make gui
 ```
 
 Tests cover URL checks, the progress parser, the queue (pause keeps the partial file, cancel removes it), user isolation, and the file token download. They do not call YouTube.
@@ -268,4 +292,4 @@ The visual system for the extension is written down in [design.md](design.md).
 
 ## Command-line tool
 
-`install.sh`, `bin/youtube-gir`, and `make`’s server binary are different programs. The shell tool installs as `youtube-gir` / `youtube-git` and is documented in [docs/cli.fa.md](docs/cli.fa.md). `make build` writes the API server to `dist/youtubegir`.
+`install.sh`, `bin/youtube-gir`, the desktop app, and `make`’s server binary are different programs. The shell tool installs as `youtube-gir` / `youtube-git` and is documented in [docs/cli.fa.md](docs/cli.fa.md). `make build` writes `dist/youtubegir` and `dist/youtubegir-gui`. `make gui` runs the desktop app.

@@ -27,3 +27,7 @@ Cards use a 18px radius, a hairline inner stroke, and a wide soft shadow. The ma
 ## Behavior
 
 Light and dark follow `prefers-color-scheme`. On YouTube, the injected panel also follows the page `dark` attribute. Layout uses logical properties so Persian (`fa`) can flip to right-to-left without a second stylesheet. Strings live in `extension/src/i18n.js`. Add a language by adding one object there.
+
+## Desktop
+
+The desktop window uses these same tokens. Its cards are solid, with a hairline stroke, and it does not use the popup's backdrop blur. Light and dark still follow `prefers-color-scheme`. English is the default. Persian is used when the browser language starts with `fa`.

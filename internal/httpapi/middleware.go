@@ -32,7 +32,7 @@ func requestLog() gin.HandlerFunc {
 func cors() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Key, Access-Control-Request-Private-Network")
 		c.Header("Access-Control-Allow-Private-Network", "true")
 		c.Header("Access-Control-Max-Age", "86400")

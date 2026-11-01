@@ -67,8 +67,9 @@ jobs:
           VERSION: ${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
         run: |
           internal="${VERSION#v}"
-          chmod +x "dist/youtubegir-${VERSION}-linux-amd64"
+          chmod +x "dist/youtubegir-${VERSION}-linux-amd64" "dist/youtubegir-gui-${VERSION}-linux-amd64"
           bash scripts/smoke.sh "dist/youtubegir-${VERSION}-linux-amd64" "$internal"
+          bash scripts/smoke.sh "dist/youtubegir-gui-${VERSION}-linux-amd64" "$internal" gui
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -92,9 +93,18 @@ jobs:
           esac
           notes=$(mktemp)
           cat > "$notes" <<EOF
-          Server binaries for macOS (Apple silicon and Intel), Linux (amd64 and arm64), and Windows (amd64), plus the Chrome extension.
+          Server binaries for macOS (Apple silicon and Intel), Linux (amd64 and arm64), and Windows (amd64), the desktop app, and the Chrome extension.
 
-          The server does not include yt-dlp, ffmpeg, or deno. Install those on the machine that runs the binary.
+          The server and the desktop app do not include yt-dlp, ffmpeg, or deno. Install those on the machine that runs the binary.
+
+          The desktop app starts the server and opens a window. Close the window to stop the server. Settings shows the URL and API key for the extension.
+
+          \`\`\`bash
+          chmod +x youtubegir-gui-${tag}-darwin-arm64
+          ./youtubegir-gui-${tag}-darwin-arm64
+          \`\`\`
+
+          It listens on 127.0.0.1:6543 when that port is free. Data stays in the user application folder. YG_GUI_NO_BROWSER=1 starts the server without a window. Chrome, Edge, Chromium, or Brave opens the window.
 
           \`\`\`bash
           chmod +x youtubegir-${tag}-darwin-arm64
